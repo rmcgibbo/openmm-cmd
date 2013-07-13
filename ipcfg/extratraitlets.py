@@ -36,6 +36,7 @@ unit.Quantity.__repr__ = _Quantity_str
 
 
 class Quantity(Float):
+
     '''A united float trait.'''
 
     def __init__(self, default_value, **metadata):

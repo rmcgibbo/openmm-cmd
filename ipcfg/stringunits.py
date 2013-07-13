@@ -9,7 +9,9 @@ from simtk import unit
 # Functions
 #-----------------------------------------------------------------------------
 
+
 class _UnitContext(ast.NodeTransformer):
+
     '''Node transformer for an AST hack that turns raw strings into
     complex simt.unit.Unit expressions. See _str_to_unit for how this
     is used -- it's not really meant to stand on its own

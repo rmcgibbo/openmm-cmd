@@ -6,7 +6,9 @@ from ipcfg.extratraitlets import Quantity
 from ipcfg.application import Application
 from ipcfg.openmmapplication import OpenMMApplication, AppConfigurable
 
+
 class General(AppConfigurable):
+
     """General options for the application.
     """
 
@@ -43,9 +45,10 @@ class General(AppConfigurable):
 
     def get_forcefield(self):
         "Create the forcefield object"
-        files = [self.forcefield.replace('-','').lower() + '.xml']
+        files = [self.forcefield.replace('-', '').lower() + '.xml']
         if self.water in ['SPC/E', 'TIP3P', 'TIP4-Ew', 'TIP5P']:
-            files.append(self.water.replace('/', '').replace('-', '').lower() + '.xml')
+            files.append(
+                self.water.replace('/', '').replace('-', '').lower() + '.xml')
         elif self.water == 'Implicit':
             if self.forcefield == 'amber96':
                 files.append('amber96_obc.xml')
@@ -58,7 +61,8 @@ class General(AppConfigurable):
             else:
                 raise RuntimeError()
 
-        script('forcefield = app.ForceField(%s)' % ', '.join(["'%s'" % f for f in files]))
+        script('forcefield = app.ForceField(%s)' %
+               ', '.join(["'%s'" % f for f in files]))
         return app.ForceField(*files)
 
     def get_positions(self):
@@ -86,7 +90,8 @@ class General(AppConfigurable):
             script('platform = None')
             return None
         else:
-            script("platform = mm.Platform.getPlatformByName('%s')" % self.platform)
+            script("platform = mm.Platform.getPlatformByName('%s')" %
+                   self.platform)
             return mm.Platform.getPlatformByName(self.platform)
 
     def get_platform_properties(self):
@@ -106,6 +111,7 @@ class General(AppConfigurable):
 
 
 class System(AppConfigurable):
+
     "Parameters for the system"
 
     nb_method = CaselessStrEnum(['NoCutoff', 'CutoffNonPeriodic',
@@ -123,7 +129,7 @@ class System(AppConfigurable):
     rigid_water = Bool(True, config=True, help='''Keep water rigid. Be aware
         that flexible water may require you to further reduce the integration
         step size, typically to about 0.5 fs.''')
-    cutoff = Quantity(1.0*unit.nanometers, config=True,
+    cutoff = Quantity(1.0 * unit.nanometers, config=True,
         help='''Cutoff for long-range non-bonded interactions. This option is
         usef for all non-bonded methods except for "NoCutoff".''')
     rand_vels = Bool(True, config=True, help='''Initialize the system
@@ -141,6 +147,7 @@ class System(AppConfigurable):
 
 
 class Integrator(AppConfigurable):
+
     "Parameters for the Integrator, Thermostats and Barostats"
 
     kind = CaselessStrEnum(['Langevin', 'Verlet', 'Brownian',
@@ -204,26 +211,27 @@ class Integrator(AppConfigurable):
             raise TraitError("You should only use the MonteCarlo barostat on a system that is "
                              "under temperature control")
 
-
     def get_integrator(self):
         "Fetch the integrator"
 
         if self.kind == 'Langevin':
-            script('integrator = mm.LangevinIntegrator(%s, %s, %s)' \
-                          % (self.temp, self.collision_rate, self.dt))
+            script('integrator = mm.LangevinIntegrator(%s, %s, %s)'
+                   % (self.temp, self.collision_rate, self.dt))
             return mm.LangevinIntegrator(self.temp, self.collision_rate, self.dt)
         elif self.kind == 'Brownian':
-            script('integrator = mm.BrownianIntegrator(%s, %s, %s)' \
-                          % (self.temp, self.collision_rate, self.dt))
+            script('integrator = mm.BrownianIntegrator(%s, %s, %s)'
+                   % (self.temp, self.collision_rate, self.dt))
             return mm.BrownianIntegrator(self.temp, self.collision_rate, self.dt)
         elif self.kind == 'Verlet':
             script('integrator = mm.VerletIntegrator(%s)' % self.dt)
             return mm.VerletIntegrator(self.dt)
         elif self.kind == 'VariableVerlet':
-            script('integrator = mm.VariableVerletIntegrator(%s)' % self.tolerance)
+            script('integrator = mm.VariableVerletIntegrator(%s)' %
+                   self.tolerance)
             return VariableVerletIntegrator(self.tolerance)
         elif self.kind == 'VariableLangevin':
-            script('integrator = mm.VariableLangevinIntegrator(%s)' % self.tolerance)
+            script('integrator = mm.VariableLangevinIntegrator(%s)' %
+                   self.tolerance)
             return VariableLangevinIntegrator(self.tolerance)
         else:
             raise RuntimeError()
@@ -233,22 +241,25 @@ class Integrator(AppConfigurable):
 
         forces = []
         if self.barostat == 'MonteCarlo':
-            script('system.addForce(mm.MonteCarloBarostat(%s, %s, %s)' % \
-                          (self.pressure, self.temp, self.barostat_interval))
+            script('system.addForce(mm.MonteCarloBarostat(%s, %s, %s)' %
+                  (self.pressure, self.temp, self.barostat_interval))
             forces.append(mm.MonteCarloBarostat(self.pressure, self.temp,
                                                 self.barostat_interval))
         if self.thermostat == 'Andersen':
-            script('system.addForce(mm.AndersenThermostat(%s, %s)' % \
-                          (self.temp, self.collision_rate))
-            forces.append(mm.AndersenThermostat(self.temp, self.collision_rate))
+            script('system.addForce(mm.AndersenThermostat(%s, %s)' %
+                  (self.temp, self.collision_rate))
+            forces.append(
+                mm.AndersenThermostat(self.temp, self.collision_rate))
 
         return forces
 
 
 class Simulation(AppConfigurable):
+
     "Parameters for the simulation object, including reporters, number of steps, etc"
 
-    n_steps = Int(1000, config=True, help='''Number of steps of simulation to run.''')
+    n_steps = Int(1000, config=True,
+                  help='''Number of steps of simulation to run.''')
     minimize = Bool(True, config=True, help='''First perform local energy
         minimization, to find a local potential energy minimum near the
         starting structure.''')
@@ -264,6 +275,7 @@ class Simulation(AppConfigurable):
 
 
 class MakeConfig(Application):
+
     "Subapplication that creates and saves a config file"
 
     def start(self, config_file_path):
@@ -292,15 +304,15 @@ class MakeConfig(Application):
 class OpenMM(OpenMMApplication):
     short_description = 'OpenMM: GPU Accelerated Molecular Dynamics'
     long_description = '''Run a molecular simulaton using the OpenMM toolkit.'''
-    
+
     classes = [General, System, Integrator, Simulation]
     subcommands = {'make_config': (MakeConfig,
-        '''Make a template input configuration file''')}
-        
-    log_level = Enum((0,10,20,30,40,50,'DEBUG','INFO','WARN','ERROR','CRITICAL'),
-         default_value='INFO', config=True, help="""Set the log level by
+                                   '''Make a template input configuration file''')}
+
+    log_level = Enum(
+        (0, 10, 20, 30, 40, 50, 'DEBUG', 'INFO', 'WARN', 'ERROR', 'CRITICAL'),
+        default_value='INFO', config=True, help="""Set the log level by
          value or name.""")
-         
 
     def start(self):
         super(OpenMM, self).start()
@@ -311,7 +323,3 @@ if __name__ == '__main__':
     app = OpenMM.instance()
     app.initialize()
     app.start()
-
-
-
-
