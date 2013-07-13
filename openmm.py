@@ -361,7 +361,8 @@ class OpenMM(OpenMMApplication):
     long_description = '''Run a molecular simulaton using the OpenMM toolkit.'''
 
     # Configured Classes. During initialization, these guys are
-    # instantiated based on the config file / command line.
+    # instantiated based on the config file / command line when
+    # initialize_configured_classes() is executed
     classes = [General, System, Dynamics, Simulation]
     general = Instance(General)
     system = Instance(System)
@@ -376,7 +377,20 @@ class OpenMM(OpenMMApplication):
         default_value='INFO', config=True, help="""Set the log level by
          value or name.""")
 
+    def initialize(self, argv=None):
+        super(OpenMM, self).initialize(argv)
+        try:
+            self.initialize_configured_classes()
+            self.validate()
+        except TraitError as e:
+            self.error(e)
+
     def validate(self):
+        """Run validation on the whole configuration tree. This method runs
+        validations that cross between different AppConfigurables, and then
+        delegates to each AppConfigurable individually (this happens in super)
+        for it to run its within-class validations.
+        """
         super(OpenMM, self).validate()
         if self.dynamics.integrator in ['Langevin', 'Verlet']:
             if self.system.constraints == 'None' and self.dynamics.dt > 1*unit.femtoseconds:
@@ -432,13 +446,7 @@ class OpenMM(OpenMMApplication):
         #ip.embed()
 
 
-    def initialize(self, argv=None):
-        super(OpenMM, self).initialize(argv)
-        try:
-            self.initialize_configured_classes()
-            self.validate()
-        except TraitError as e:
-            self.error(e)
+
 
 
 if __name__ == '__main__':
