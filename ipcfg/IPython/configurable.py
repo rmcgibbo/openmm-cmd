@@ -25,13 +25,13 @@ Authors:
 # Imports
 #-----------------------------------------------------------------------------
 
+import sys
 import datetime
 from copy import deepcopy
 
 from loader import Config
 from traitlets import HasTraits, Instance, List
 from text import indent, wrap_paragraphs
-
 
 #-----------------------------------------------------------------------------
 # Helper classes for Configurables
@@ -52,7 +52,7 @@ class MultipleInstanceError(ConfigurableError):
 class Configurable(HasTraits):
 
     config = Instance(Config, (), {})
-    parent = Instance('ipcfg.configurable.Configurable')
+    parent = Instance('ipcfg.IPython.configurable.Configurable')
     created = None
 
     def __init__(self, **kwargs):

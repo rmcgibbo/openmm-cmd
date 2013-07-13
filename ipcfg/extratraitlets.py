@@ -5,7 +5,7 @@
 
 from simtk import unit
 from .stringunits import str_to_unit
-from .traitlets import Float, TraitError, class_of
+from .IPython.traitlets import Float, TraitError, class_of
 unit.nm = unit.nanometers
 unit.ps = unit.picoseconds
 

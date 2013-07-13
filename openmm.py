@@ -1,9 +1,11 @@
 import sys
 from simtk import unit
 
-from ipcfg.traitlets import Int, Bool, Unicode, CaselessStrEnum, Instance, Enum, Float
+from ipcfg.IPython.traitlets import (Int, Bool, Unicode, CaselessStrEnum,
+                                     Instance, Enum, Float)
+from ipcfg.IPython.application import Application
+
 from ipcfg.extratraitlets import Quantity
-from ipcfg.application import Application
 from ipcfg.openmmapplication import OpenMMApplication, AppConfigurable
 
 

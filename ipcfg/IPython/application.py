@@ -220,7 +220,7 @@ class Application(SingletonConfigurable):
     # and the second being the help string for the subcommand
     subcommands = Dict()
     # parse_command_line will initialize a subapp, if requested
-    subapp = Instance('ipcfg.application.Application', allow_none=True)
+    subapp = Instance('ipcfg.IPython.application.Application', allow_none=True)
 
     # extra command-line arguments that don't set config values
     extra_args = List(Unicode)

@@ -1,11 +1,11 @@
 import os
 import sys
 
-from traitlets import Unicode, Instance, List
-from application import Application
-from configurable import LoggingConfigurable
-from text import indent, dedent, wrap_paragraphs
-from loader import ConfigFileNotFound
+from .IPython.traitlets import Unicode, Instance, List
+from .IPython.application import Application
+from .IPython.configurable import LoggingConfigurable
+from .IPython.text import indent, dedent, wrap_paragraphs
+from .IPython.loader import ConfigFileNotFound
 
 
 class OpenMMApplication(Application):
@@ -135,7 +135,7 @@ class AppConfigurable(LoggingConfigurable):
     that you can use to check that things get set correctly.
        
        """
-    application = Instance('ipcfg.application.Application')
+    application = Instance('ipcfg.IPython.application.Application')
 
     def _application_default(self):
         from .application import Application
