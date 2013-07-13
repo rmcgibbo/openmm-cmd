@@ -1,0 +1,6 @@
+IPython-based Configuration System
+==================================
+
+Command line + config file framework / parser based on IPython traitlets
+system.
+
