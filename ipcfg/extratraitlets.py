@@ -7,7 +7,10 @@ from simtk import unit
 from .stringunits import str_to_unit
 from .IPython.traitlets import Float, TraitError, class_of
 unit.nm = unit.nanometers
+unit.A = unit.angstroms
 unit.ps = unit.picoseconds
+unit.fs = unit.femtoseconds
+
 
 #-----------------------------------------------------------------------------
 # Dirty Hacks

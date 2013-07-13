@@ -1,12 +1,47 @@
+#-----------------------------------------------------------------------------
+# Imports
+#-----------------------------------------------------------------------------
+
+
 import os
 import sys
 
-from .IPython.traitlets import Unicode, Instance, List
+from .IPython import traitlets
+from .IPython.traitlets import Unicode, Instance, List, TraitError
 from .IPython.application import Application
 from .IPython.configurable import LoggingConfigurable
 from .IPython.text import indent, dedent, wrap_paragraphs
 from .IPython.loader import ConfigFileNotFound
 
+#-----------------------------------------------------------------------------
+# Dirty Hacks
+#-----------------------------------------------------------------------------
+
+# Replace the function add_article in traitlets with a version that makes
+# the error message thrown when a trait is invalid better.
+
+# WITH HACK
+# $ openmm --dt=1.0*A
+# openmm: error: The 'dt' trait of the dynamics section must have units of
+# femtosecond, but a value in units of angstrom was specified.
+
+# WITHOUT HACK
+# $ openmm --dt=1.0*A
+# openmm: error: The 'dt' trait of a Dynamics must have units of femtosecond,
+# but a value in units of angstrom was specified.
+
+_super_traitlets_add_article = traitlets.add_article
+def _traitlets_add_article(name):
+    if name in [c.__name__ for c in AppConfigurable.__subclasses__()]:
+        return 'the %s section' % name.lower()
+    else:
+        return _super_traitlets_add_article(object)
+traitlets.add_article = _traitlets_add_article
+
+
+#-----------------------------------------------------------------------------
+# Classes
+#-----------------------------------------------------------------------------
 
 class OpenMMApplication(Application):
 
@@ -15,8 +50,9 @@ class OpenMMApplication(Application):
     """
 
     config_file_path = Unicode('openmm_config.py')
+    configured_classes = List()
 
-    def initialize(self):
+    def initialize(self, argv=None):
         '''Do the first steps to configure the application, including
         finding and loading the configuration file'''
         # load the config file before parsing argv so that
@@ -29,7 +65,30 @@ class OpenMMApplication(Application):
             self.config_file_path = config_file_path
             sys.argv.remove(config[0])
 
-        super(OpenMMApplication, self).initialize()
+        super(OpenMMApplication, self).initialize(argv)
+    
+    def initialize_configured_classes(self):
+        for klass in filter(lambda c: c != self.__class__, self.classes):
+            traitname = klass.__name__.lower()
+            
+            trait = self.class_traits()[traitname]
+            if trait is None:
+                raise AttributeError(
+                    '''To use initialize_classes, you need to make Instance trait on your application
+                    with the name of each of the items in classes that will be used to
+                    hold the initialized value. I coulndn't find an Instance trait named
+                    %s''' % traitname)
+            
+            if not isinstance(trait, Instance):
+                raise AttributeError("%s needs to be an Instance trait" % trait)
+                
+            instantiated = klass(config=self.config)
+            self.configured_classes.append(instantiated)
+            setattr(self, traitname, instantiated)
+
+    def validate(self):
+        for cls in self.configured_classes:
+            cls.validate()
 
     def load_config_file(self, path, error_on_not_exists=False):
         try:
@@ -103,10 +162,11 @@ class OpenMMApplication(Application):
 
     def error(self, message=None):
         if message:
-            self._print_message('%s: error: %s\n'
-                    % (os.path.basename(sys.argv[0]), message), sys.stderr)
+            fmt = '%s: error: %s\n' % (os.path.basename(sys.argv[0]), message)
             self._print_message(
-                '\nTo see all available configurables, use `--help-all`\n', sys.stderr)
+                os.linesep.join(wrap_paragraphs(fmt, ncols=78)), sys.stderr)
+            self._print_message(
+                '\n\nTo see all available configurables, use `--help-all`\n', sys.stderr)
         sys.exit(2)
 
     def _print_message(self, message, file=None):
@@ -116,13 +176,22 @@ class OpenMMApplication(Application):
             file.write(message)
 
     def flatten_flags(self):
-        flags = {}
-        aliases = {}
-
+        """Hook back into the superclass to enable command line options to be
+        parsed like aliases even when they're not printed out in the alias
+        table.
+        
+        If there's an option like --ConfigurableClass.option, this little
+        hack makes it possible to specify it using --option.
+        
+        This method is called in the superclass when parsing the command
+        line options, so we just hijack it to spoof the alias table. Maybe
+        there is better way to do this?
+        """
+        flags, aliases = super(OpenMMApplication, self).flatten_flags()
         for cls in filter(lambda c: c != self.__class__, self.classes):
-            for name in cls.class_traits().keys():
+            for name in cls.class_traits(config=True).keys():
                 aliases[name] = '%s.%s' % (cls.__name__, name)
-
+    
         return flags, aliases
 
 
@@ -138,12 +207,20 @@ class AppConfigurable(LoggingConfigurable):
     application = Instance('ipcfg.IPython.application.Application')
 
     def _application_default(self):
-        from .application import Application
+        from .IPython.application import Application
         return Application.instance()
 
-    active = List(help='''List of the names of the traits on this Configurable
-        that were set during initialization and did not just inherit their
-        default value''')
+    specified_config_traits = List(help='''List of the names of the traits on this
+        Configurable that were set during initialization and did not just
+        inherit their default value. (Which traits were actually set in the
+        command line or config file).''')
+    active_config_traits = List(help='''List of the names of the traits that are actually
+        in use. This might excludes traits which only matter when a certain condition
+        is true (i.e. there is no meaning to the setting of the
+        XYZ_ALGORITHM_TOLERANCE_PARAMETER when XYZ_ALGORITHM is not being used.''')
+    def _active_config_traits_default(self):
+        return self.class_traits(config=True).keys()
+
 
     def __init__(self, config={}):
         for key in config[self.__class__.__name__].keys():
@@ -152,8 +229,7 @@ class AppConfigurable(LoggingConfigurable):
                     '%s has no configurable trait %s' % (self.__class__.__name__, key))
 
         super(AppConfigurable, self).__init__(config=config)
-        self.active = config[self.__class__.__name__].keys()
-        self.validate()
+        self.specified_config_traits = config[self.__class__.__name__].keys()
 
     def validate(self):
         "Run any validation on the traits in this class"

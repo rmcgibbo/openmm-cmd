@@ -1,12 +1,21 @@
+#-----------------------------------------------------------------------------
+# Imports
+#-----------------------------------------------------------------------------
+
+import os
 import sys
 from simtk import unit
 
-from ipcfg.IPython.traitlets import (Int, Bool, Unicode, CaselessStrEnum,
-                                     Instance, Enum, Float)
-from ipcfg.IPython.application import Application
-
+# command line configuration system
 from ipcfg.extratraitlets import Quantity
 from ipcfg.openmmapplication import OpenMMApplication, AppConfigurable
+from ipcfg.IPython.traitlets import (Int, Bool, Bytes, CaselessStrEnum,
+                                     Instance, Enum, Float, TraitError)
+from ipcfg.IPython.application import Application
+
+#-----------------------------------------------------------------------------
+# Classes
+#-----------------------------------------------------------------------------
 
 
 class General(AppConfigurable):
@@ -28,11 +37,11 @@ class General(AppConfigurable):
     precision = CaselessStrEnum(['Single', 'Mixed', 'Double'], config=True,
         defaut_value='Mixed', help='''Level of numeric precision to use for
         calculations.''')
-    coords = Unicode(config=True, help='''OpenMM can take a pdb...''')
+    coords = Bytes(config=True, help='''OpenMM can take a pdb...''')
     #pdb_file = Instance(app.PDBFile)
 
     def validate(self):
-        if 'precision' in self.active and self.precision != 'Double' and self.platform == 'Reference':
+        if 'precision' in self.specified_config_traits and self.precision != 'Double' and self.platform == 'Reference':
             raise TraitError('Manually setting the precision is only '
                              'appropriate on the OpenCL and CUDA platforms')
 
@@ -141,18 +150,37 @@ class System(AppConfigurable):
         used for generating initial velocities. This option is only used if
         rand_vels == True.''')
 
+    def _active_config_traits_default(self):
+        """Construct a list of all of the configurable traits that are currently
+        'active', in the sense that their value will have some effect on the
+        simulation.
+        """
+        active_traits = ['nb_method', 'constraints', 'rigid_water', 'rand_vels']
+        if self.nb_method in ['PME', 'Ewald']:
+            active_traits.append('ewald_tol')
+        if self.rand_vels:
+            active_traits.append('gen_temp')
+        return active_traits
+
     def validate(self):
-        if self.nb_method not in ['PME', 'Ewald'] and 'ewald_tol' in self.active:
-            raise TraitError("The Ewald summation tolerance trait, 'ewald_tol', "
+        """Run some validation checks.
+        """
+        # note that many of these checks are sort of redundant with the computation
+        # of the active traits, but they provide a nicer english explanation of 
+        # what's wrong with the configuration, which is important for the user.
+        if self.nb_method not in ['PME', 'Ewald'] and 'ewald_tol' in self.specified_config_traits:
+            raise TraitError("The Ewald summation tolerance option, 'ewald_tol', "
                              "is only appropriate to set when 'nb_method' is "
                              "PME or Ewald.")
+        if not self.rand_vels and 'gen_temp' in self.specified_config_traits:
+            raise TraitError("The generation temperature option, 'gen_temp' "
+                             "is only appropriate when 'rand_vels' is True")
 
+class Dynamics(AppConfigurable):
 
-class Integrator(AppConfigurable):
+    "Parameters for the integrator, thermostats and barostats"
 
-    "Parameters for the Integrator, Thermostats and Barostats"
-
-    kind = CaselessStrEnum(['Langevin', 'Verlet', 'Brownian',
+    integrator = CaselessStrEnum(['Langevin', 'Verlet', 'Brownian',
         'VariableLangevin', 'VariableVerlet'], config=True, allow_none=False,
         default_value='Langevin', help='''OpenMM offers a choice of several
         different integration methods. Refer to the user guide for
@@ -182,56 +210,81 @@ class Integrator(AppConfigurable):
     dt = Quantity(2 * unit.femtoseconds, config=True, help='''Timestep
         for fixed-timestep integrators.''')
 
+    def _active_config_traits_default(self):
+        """Construct a list of all of the configurable traits that are currently
+        'active', in the sense that their value will have some effect on the
+        simulation.
+        """
+        active_traits = ['integrator', 'barostat', 'thermostat']
+        if self.integrator in ['Langevin', 'Verlet', 'Brownian']:
+            active_traits.append('dt')
+        else:
+            active_traits.append('tolerance')
+
+        if self.barostat == 'MonteCarlo':
+            active_traits.append('pressure')
+            active_traits.append('barostat_interval')
+        
+        if self.integrator in ['Langevin', 'VariableLangevin', 'Brownian'] or self.thermostat == 'Andersen':
+            active_traits.append('temp')
+        return active_traits
+
     def validate(self):
-        thermostatted = (self.kind in ['Langevin', 'Brownian', 'VariableLangevin'] or
+        """Run some validation checks.
+        """
+        # note that many of these checks are sort of redundant with the computation
+        # of the active traits, but they provide a nicer english explanation of 
+        # what's wrong with the configuration, which is important for the user.
+        
+        thermostatted = (self.integrator in ['Langevin', 'Brownian', 'VariableLangevin'] or
                          self.thermostat == 'Andersen')
 
-        if 'tolerance' in self.active and self.kind not in ['VariableLangevin', 'VariableVerlet']:
-            raise TraitError("The variable integrator error threshold trait, 'tolerance',"
+        if 'tolerance' in self.specified_config_traits and self.integrator not in ['VariableLangevin', 'VariableVerlet']:
+            raise TraitError("The variable integrator error threshold option, 'tolerance',"
                              "is only appropriate when using the VariableLangevin or "
-                             "VariableVerlet integrators")
-        if 'dt' in self.active and self.kind not in ['Langevin', 'Verlet', 'Brownian']:
-            raise TraitError("The timestep trait, 'dt', is only appropriate when using "
+                             "VariableVerlet integrators.")
+        if 'dt' in self.specified_config_traits and self.integrator not in ['Langevin', 'Verlet', 'Brownian']:
+            raise TraitError("The timestep option, 'dt', is only appropriate when using "
                              "a fixed timestep integrator.")
 
-        if 'collision_rate' in self.active and not thermostatted:
-            raise TraitError("The friction coefficient trait, 'collision_rate', is only "
+        if 'collision_rate' in self.specified_config_traits and not thermostatted:
+            raise TraitError("The friction coefficient option, 'collision_rate', is only "
                              "appropriate when using a stochastic integrator (e.g. Langevin, "
-                             "Brownian, VariableLangevin) or an Andersen thermostat")
-        if 'temp' in self.active and not thermostatted:
-            raise TraitError("The temperature target trrait, 'temp', is only "
-                             "appropriate when using the a thermostat or stochastic integrator")
+                             "Brownian, VariableLangevin) or an Andersen thermostat.")
+        if 'temp' in self.specified_config_traits and not thermostatted:
+            raise TraitError("The temperature target option, 'temp', is only "
+                             "appropriate when using a thermostat or stochastic integrator.")
 
-        if 'pressure' in self.active and not self.barostat == 'MonteCarlo':
-            raise TraitError("The pressure target trait, 'pressure', is only "
+        if 'pressure' in self.specified_config_traits and not self.barostat == 'MonteCarlo':
+            raise TraitError("The pressure target option, 'pressure', is only "
                              "appropriate when using the Monte Carlo barostat")
-        if 'barostat_interval' in self.active and not self.barostat == 'MonteCarlo':
-            raise TraitError("The barostat interval trait, 'barostat_interval', is only "
-                             "appropriate when using the Monte Carlo barostat")
+        if 'barostat_interval' in self.specified_config_traits and not self.barostat == 'MonteCarlo':
+            raise TraitError("The barostat interval option, 'barostat_interval', is only "
+                             "appropriate when using the Monte Carlo barostat.")
 
         if (self.barostat == 'MonteCarlo') and not thermostatted:
             raise TraitError("You should only use the MonteCarlo barostat on a system that is "
-                             "under temperature control")
+                             "under temperature control.")
 
     def get_integrator(self):
         "Fetch the integrator"
 
-        if self.kind == 'Langevin':
+        if self.integrator == 'Langevin':
             script('integrator = mm.LangevinIntegrator(%s, %s, %s)'
                    % (self.temp, self.collision_rate, self.dt))
             return mm.LangevinIntegrator(self.temp, self.collision_rate, self.dt)
-        elif self.kind == 'Brownian':
+        elif self.integrator == 'Brownian':
             script('integrator = mm.BrownianIntegrator(%s, %s, %s)'
                    % (self.temp, self.collision_rate, self.dt))
             return mm.BrownianIntegrator(self.temp, self.collision_rate, self.dt)
-        elif self.kind == 'Verlet':
+        elif self.integrator == 'Verlet':
             script('integrator = mm.VerletIntegrator(%s)' % self.dt)
             return mm.VerletIntegrator(self.dt)
-        elif self.kind == 'VariableVerlet':
+        elif self.integrator == 'VariableVerlet':
             script('integrator = mm.VariableVerletIntegrator(%s)' %
                    self.tolerance)
             return VariableVerletIntegrator(self.tolerance)
-        elif self.kind == 'VariableLangevin':
+        elif self.integrator == 'VariableLangevin':
             script('integrator = mm.VariableLangevinIntegrator(%s)' %
                    self.tolerance)
             return VariableLangevinIntegrator(self.tolerance)
@@ -265,7 +318,7 @@ class Simulation(AppConfigurable):
     minimize = Bool(True, config=True, help='''First perform local energy
         minimization, to find a local potential energy minimum near the
         starting structure.''')
-    traj_file = Unicode('output.dcd', config=True, help='''Filename to save the
+    traj_file = Bytes('output.dcd', config=True, help='''Filename to save the
         resulting trajectory to, in DCD format.''')
     traj_freq = Int(1000, config=True, help='''Frequency, in steps, to
         save the state to disk in the DCD format.''')
@@ -307,7 +360,14 @@ class OpenMM(OpenMMApplication):
     short_description = 'OpenMM: GPU Accelerated Molecular Dynamics'
     long_description = '''Run a molecular simulaton using the OpenMM toolkit.'''
 
-    classes = [General, System, Integrator, Simulation]
+    # Configured Classes. During initialization, these guys are
+    # instantiated based on the config file / command line.
+    classes = [General, System, Dynamics, Simulation]
+    general = Instance(General)
+    system = Instance(System)
+    dynamics = Instance(Dynamics)
+    simulation = Instance(Simulation)
+
     subcommands = {'make_config': (MakeConfig,
                                    '''Make a template input configuration file''')}
 
@@ -316,12 +376,64 @@ class OpenMM(OpenMMApplication):
         default_value='INFO', config=True, help="""Set the log level by
          value or name.""")
 
+    def validate(self):
+        super(OpenMM, self).validate()
+        if self.dynamics.integrator in ['Langevin', 'Verlet']:
+            if self.system.constraints == 'None' and self.dynamics.dt > 1*unit.femtoseconds:
+                raise TraitError('You are likely using too large a timestep. With the '
+                                 'Langevin or Verlet integrators, without constraints a '
+                                 'timestep over 1 femtosecond is not recommended.')
+            if self.system.constraints in ['HBonds', 'AllBonds'] and self.dynamics.dt > 2*unit.femtoseconds:
+                raise TraitError('You are likely using too large a timestep. With the '
+                                 'Langevin or Verlet integrators and bond constraints, a '
+                                 'timestep over 2 femtoseconds is not recommended.')
+            if self.system.constraints == 'HAngles' and self.dynamics.dt > 4*unit.femtoseconds:
+                raise TraitError('You are likely using too large a timestep. With the '
+                                 'Langevin or Verlet integrators and HAngle constraints, a '
+                                 'timestep over 4 femtoseconds is not recommended.')
+
+        if ((self.general.platform != 'Reference') and
+            (self.general.precision in ['Single', 'Mixed'])  and
+            (self.system.nb_method == 'PME') and (self.ewald_tol < 5e-5)):
+                raise TraitError('Your ewald error tolerance is so low that is numerical '
+                                 'error is likely to cause the forces to become less accurate, '
+                                 'not more. Very small error tolerances only work in double '
+                                 'precision. (This only applies to PME. Ewald has no problem '
+                                 'with them.')
+        if (self.general.water == 'Implicit') and  (self.system.nb_method in ['CutoffPeriodic', 'Ewald', 'PME']):
+            raise TraitError('Using periodic boundary conditions with implict solvent? '
+                             'That\'s a very strange choice.  You don\'t really want '
+                             'periodic boundary conditions with implicit solvent, do you?')
+        if (self.dynamics.barostat != 'None') and  (self.system.nb_method in  ['NoCutoff', 'CutoffNonPeriodic']):
+            raise TraitError("It doesn't make sense to use a barostat with no cutoffs, "
+                             "since %s implies you're using a nonperiodic system. But adjusting "
+                             "the box volume (the way that the barostat controls the pressure) "
+                             "will have no effect." % self.system.nb_method)
+
     def start(self):
-        super(OpenMM, self).start()
+        if self.subapp is not None:
+            return self.subapp.start(self.config_file_path)
+            
+            
         print 'starting!'
-        print self.config
+        
+        print 'Active Options'
+        print self.general.active_config_traits
+        print self.system.active_config_traits
+        print self.dynamics.active_config_traits
+        print self.simulation.active_config_traits
+        #import IPython as ip
+        #ip.embed()
+
+        
+    def initialize(self, argv=None):
+        super(OpenMM, self).initialize(argv)
+        try:
+            self.initialize_configured_classes()
+            self.validate()
+        except TraitError as e:
+            self.error(e)
+
 
 if __name__ == '__main__':
-    app = OpenMM.instance()
-    app.initialize()
-    app.start()
+    OpenMM.launch_instance()

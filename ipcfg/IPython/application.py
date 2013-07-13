@@ -26,7 +26,7 @@ import sys
 from copy import deepcopy
 from collections import defaultdict
 
-from IPython.external.decorator import decorator
+from .decorator import decorator
 
 from .configurable import SingletonConfigurable
 from .loader import (
