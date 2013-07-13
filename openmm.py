@@ -150,7 +150,7 @@ class System(AppConfigurable):
         used for generating initial velocities. This option is only used if
         rand_vels == True.''')
 
-    def _active_config_traits_default(self):
+    def active_config_traits(self):
         """Construct a list of all of the configurable traits that are currently
         'active', in the sense that their value will have some effect on the
         simulation.
@@ -166,7 +166,7 @@ class System(AppConfigurable):
         """Run some validation checks.
         """
         # note that many of these checks are sort of redundant with the computation
-        # of the active traits, but they provide a nicer english explanation of 
+        # of the active traits, but they provide a nicer english explanation of
         # what's wrong with the configuration, which is important for the user.
         if self.nb_method not in ['PME', 'Ewald'] and 'ewald_tol' in self.specified_config_traits:
             raise TraitError("The Ewald summation tolerance option, 'ewald_tol', "
@@ -210,7 +210,7 @@ class Dynamics(AppConfigurable):
     dt = Quantity(2 * unit.femtoseconds, config=True, help='''Timestep
         for fixed-timestep integrators.''')
 
-    def _active_config_traits_default(self):
+    def active_config_traits(self):
         """Construct a list of all of the configurable traits that are currently
         'active', in the sense that their value will have some effect on the
         simulation.
@@ -224,7 +224,7 @@ class Dynamics(AppConfigurable):
         if self.barostat == 'MonteCarlo':
             active_traits.append('pressure')
             active_traits.append('barostat_interval')
-        
+
         if self.integrator in ['Langevin', 'VariableLangevin', 'Brownian'] or self.thermostat == 'Andersen':
             active_traits.append('temp')
         return active_traits
@@ -233,9 +233,9 @@ class Dynamics(AppConfigurable):
         """Run some validation checks.
         """
         # note that many of these checks are sort of redundant with the computation
-        # of the active traits, but they provide a nicer english explanation of 
+        # of the active traits, but they provide a nicer english explanation of
         # what's wrong with the configuration, which is important for the user.
-        
+
         thermostatted = (self.integrator in ['Langevin', 'Brownian', 'VariableLangevin'] or
                          self.thermostat == 'Andersen')
 
@@ -395,11 +395,11 @@ class OpenMM(OpenMMApplication):
         if ((self.general.platform != 'Reference') and
             (self.general.precision in ['Single', 'Mixed'])  and
             (self.system.nb_method == 'PME') and (self.ewald_tol < 5e-5)):
-                raise TraitError('Your ewald error tolerance is so low that is numerical '
-                                 'error is likely to cause the forces to become less accurate, '
-                                 'not more. Very small error tolerances only work in double '
-                                 'precision. (This only applies to PME. Ewald has no problem '
-                                 'with them.')
+            raise TraitError('Your ewald error tolerance is so low that is numerical '
+                             'error is likely to cause the forces to become less accurate, '
+                             'not more. Very small error tolerances only work in double '
+                             'precision. (This only applies to PME. Ewald has no problem '
+                             'with them.')
         if (self.general.water == 'Implicit') and  (self.system.nb_method in ['CutoffPeriodic', 'Ewald', 'PME']):
             raise TraitError('Using periodic boundary conditions with implict solvent? '
                              'That\'s a very strange choice.  You don\'t really want '
@@ -413,19 +413,25 @@ class OpenMM(OpenMMApplication):
     def start(self):
         if self.subapp is not None:
             return self.subapp.start(self.config_file_path)
-            
-            
+
+
         print 'starting!'
-        
+
         print 'Active Options'
-        print self.general.active_config_traits
-        print self.system.active_config_traits
-        print self.dynamics.active_config_traits
-        print self.simulation.active_config_traits
+        print self.general.active_config_traits()
+        print self.system.active_config_traits()
+        print self.dynamics.active_config_traits()
+        print self.simulation.active_config_traits()
+
+        print '\nSpecified Options'
+        print self.general.specified_config_traits
+        print self.system.specified_config_traits
+        print self.dynamics.specified_config_traits
+        print self.simulation.specified_config_traits
         #import IPython as ip
         #ip.embed()
 
-        
+
     def initialize(self, argv=None):
         super(OpenMM, self).initialize(argv)
         try:
