@@ -42,7 +42,9 @@ Features
   
   After running a simulation, all of the configuration options you specified --
   either in your input config file or on the command line -- are printed to
-  a runnable output config file.
+  a runnable output config file. The config file always contains the help
+  text for every option, so you shouldn't have to consult the documentation
+  to figure out what a given flag is (i.e. no 'ntx=7' sander options)
   
   Config options that were actually in effect during your simulation are written
   there, and config options that were not in effect, e.g. the `barostat_interval`
