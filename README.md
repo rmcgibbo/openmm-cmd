@@ -58,7 +58,7 @@ Features
   # Configuration file for openmm
   # Generated 2013-07-14 19:13:43.543040
   # Command line: /Library/Frameworks/EPD64.framework/Versions/7.3/bin/openmm --integrator=VariableVerlet
-  # OpenMM version UNKNOWN.UNKNOWN
+  # OpenMM version 5.1
 
   from simtk.unit import *
   c = get_config()
