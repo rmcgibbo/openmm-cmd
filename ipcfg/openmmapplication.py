@@ -86,6 +86,14 @@ class OpenMMApplication(Application):
 
         super(OpenMMApplication, self).initialize(argv)
 
+        # make sure that each of the groups in the config were actually used
+        # for example, if the user typed `$ openmm --Generalll.precision=1` we
+        # want to let them know that `Generalll` is not a valid class
+        classnames = set([c.__name__ for c in self.classes])
+        for c in self.config.keys():
+            if c not in classnames:
+                self.error("Bad config encountered during initialization. "
+                           "'%s' is not a configurable class or option." % c)
 
     def initialize_configured_classes(self):
         for klass in filter(lambda c: c != self.__class__, self.classes):
