@@ -98,7 +98,7 @@ Features
   c.General.coords = ''
 
   # Level of numeric precision to use for calculations.
-  c.General.precision = None
+  c.General.precision = 'Mixed'
 
   # Forcefield to use for the protein atoms. For details, consult the literature.
   c.General.forcefield = 'amber99sb-ildn'
@@ -278,7 +278,7 @@ Features
       not specified, the fastest available platform will be selected
       automatically.
   --precision=<CaselessStrEnum>
-      Default: None
+      Default: 'Mixed'
       Choices: ['Single', 'Mixed', 'Double']
       Level of numeric precision to use for calculations.
   --water=<CaselessStrEnum>

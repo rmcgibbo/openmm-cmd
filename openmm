@@ -39,8 +39,8 @@ class General(AppConfigurable):
         Reference, CUDA, and OpenCL. If not specified, the fastest available
         platform will be selected automatically.''', config=True)
     precision = CaselessStrEnum(['Single', 'Mixed', 'Double'], config=True,
-        defaut_value='Mixed', help='''Level of numeric precision to use for
-        calculations.''')
+        allow_none=False, default_value='Mixed', help='''Level of numeric
+        precision to use for calculations.''')
     coords = Bytes(config=True, help='''OpenMM can take a pdb...''')
     #pdb_file = Instance(app.PDBFile)
 
@@ -401,7 +401,7 @@ class OpenMM(OpenMMApplication):
 
         if ((self.general.platform != 'Reference') and
             (self.general.precision in ['Single', 'Mixed'])  and
-            (self.system.nb_method == 'PME') and (self.ewald_tol < 5e-5)):
+            (self.system.nb_method == 'PME') and (self.system.ewald_tol < 5e-5)):
             raise TraitError('Your ewald error tolerance is so low that is numerical '
                              'error is likely to cause the forces to become less accurate, '
                              'not more. Very small error tolerances only work in double '
