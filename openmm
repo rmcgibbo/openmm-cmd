@@ -152,7 +152,7 @@ class System(AppConfigurable):
         step size, typically to about 0.5 fs.''')
     cutoff = Quantity(1.0 * unit.nanometers, config=True,
         help='''Cutoff for long-range non-bonded interactions. This option is
-        usef for all non-bonded methods except for "NoCutoff".''')
+        used for all non-bonded methods except for "NoCutoff".''')
     rand_vels = CBool(True, config=True, help='''Initialize the system
         with random initial velocities, drawn from the Maxwell Boltzmann
         distribution.''')
