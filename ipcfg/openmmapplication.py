@@ -4,8 +4,9 @@
 
 
 import os
-import copy
 import sys
+import copy
+
 
 from .IPython import traitlets
 from .IPython.traitlets import Bytes, Instance, List, TraitError
@@ -68,8 +69,8 @@ class OpenMMApplication(Application):
         self.load_config_file(self.config_file_path, error_on_no_config_file)
 
         argv = [a for a in argv if a != config_flags[0]]
-
         super(OpenMMApplication, self).initialize(argv)
+
 
     def initialize_configured_classes(self):
         for klass in filter(lambda c: c != self.__class__, self.classes):

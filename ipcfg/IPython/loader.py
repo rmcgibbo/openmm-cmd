@@ -27,7 +27,6 @@ import __builtin__ as builtin_mod
 import os
 import re
 import sys
-from warnings import warn
 import argparse
 
 from path import filefind
@@ -50,6 +49,19 @@ class ConfigFileNotFound(ConfigError):
 
 class ArgumentError(ConfigLoaderError):
     pass
+
+class AliasError(AttributeError):
+    def __init__(self, lhs, aliases):
+        import difflib
+        closest = difflib.get_close_matches(lhs, aliases.keys(), n=1)
+        if len(closest) == 0:
+            self.msg = "Unrecognized option: '%s'." %  lhs
+        else:
+            self.msg = "Unrecognized option: '%s'. Did you mean '%s'?" % \
+                (lhs, closest[0])
+
+    def __str__(self):
+        return self.msg
 
 #-----------------------------------------------------------------------------
 # Argparse fix
@@ -85,10 +97,10 @@ class Config(dict):
         # because we are also overriding __setattr__.
         dict.__setattr__(self, '__dict__', self)
         self._ensure_subconfig()
-    
+
     def _ensure_subconfig(self):
         """ensure that sub-dicts that should be Config objects are
-        
+
         casts dicts that are under section keys to Config objects,
         which is necessary for constructing Config objects from dict literals.
         """
@@ -98,11 +110,11 @@ class Config(dict):
                     and isinstance(obj, dict) \
                     and not isinstance(obj, Config):
                 dict.__setattr__(self, key, Config(obj))
-    
+
     def _merge(self, other):
         """deprecated alias, use Config.merge()"""
         self.merge(other)
-    
+
     def merge(self, other):
         """merge another config object into this one"""
         to_update = {}
@@ -329,7 +341,7 @@ class CommandLineConfigLoader(ConfigLoader):
 
     def _exec_config_str(self, lhs, rhs):
         """execute self.config.<lhs> = <rhs>
-        
+
         * expands ~ with expanduser
         * tries to assign with raw eval, otherwise assigns with just the string,
           allowing `--C.a=foobar` and `--C.a="foobar"` to be equivalent.  *Not*
@@ -422,7 +434,6 @@ class KeyValueConfigLoader(CommandLineConfigLoader):
         self.aliases = aliases or {}
         self.flags = flags or {}
 
-
     def clear(self):
         super(KeyValueConfigLoader, self).clear()
         self.extra_args = []
@@ -472,6 +483,7 @@ class KeyValueConfigLoader(CommandLineConfigLoader):
         if flags is None:
             flags = self.flags
 
+
         # ensure argv is a list of unicode strings:
         uargv = self._decode_argv(argv)
         for idx,raw in enumerate(uargv):
@@ -490,9 +502,9 @@ class KeyValueConfigLoader(CommandLineConfigLoader):
                 # Substitute longnames for aliases.
                 if lhs in aliases:
                     lhs = aliases[lhs]
+
                 if '.' not in lhs:
-                    # probably a mistyped alias, but not technically illegal
-                    warn("Unrecognized alias: '%s', it will probably have no effect."%lhs)
+                    raise AliasError(lhs, aliases)
                 try:
                     self._exec_config_str(lhs, rhs)
                 except Exception:
@@ -658,7 +670,7 @@ class KVArgParseConfigLoader(ArgParseConfigLoader):
             self._load_flag(subc)
 
         if self.extra_args:
-            sub_parser = KeyValueConfigLoader()
+            sub_parser = KeyValueConfigLoader(aliases=self.aliases, flags=self.flags)
             sub_parser.load_config(self.extra_args)
             self.config.merge(sub_parser.config)
             self.extra_args = sub_parser.extra_args

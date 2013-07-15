@@ -61,6 +61,18 @@ class Quantity(Float):
             else:
                 self.error_units(obj, value)
 
+        if isinstance(value, int) or isinstance(value, float):
+            e = ("The '{name}' trait of {class_of} must have units of {unit}, "
+                 "but a value without units, {value}, was specified. To "
+                 "specify units, use a syntax like --{name}={default_value} "
+                 "on the command line, or c.{class_name}.{name} = "
+                 "{default_value} in the config file.").format(
+                    name=self.name, class_of=class_of(obj), unit=self.unit,
+                    value=value, default_value=self.default_value,
+                    class_name=obj.__class__.__name__)
+
+            raise TraitError(e)
+
         self.error(obj, value)
 
     def error_units(self, obj, value):

@@ -479,7 +479,7 @@ class Application(SingletonConfigurable):
             self.exit(0)
         
         # flatten flags&aliases, so cl-args get appropriate priority:
-        flags,aliases = self.flatten_flags()
+        flags, aliases = self.flatten_flags()
 
         loader = KVArgParseConfigLoader(argv=argv, aliases=aliases,
                                         flags=flags)

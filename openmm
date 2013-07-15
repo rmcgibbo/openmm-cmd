@@ -15,6 +15,7 @@ from ipcfg.extratraitlets import Quantity
 from ipcfg.openmmapplication import OpenMMApplication, AppConfigurable
 from ipcfg.IPython.traitlets import (Int, Bool, Bytes, CaselessStrEnum,
                                      Instance, Enum, Float, TraitError)
+from ipcfg.IPython.loader import AliasError
 from ipcfg.IPython.application import Application
 
 #-----------------------------------------------------------------------------
@@ -369,11 +370,11 @@ class OpenMM(OpenMMApplication):
         """Initialize this class. Parses the configuration file, loads up
         all of the configured classes, runs validation methods, etc.
         """
-        super(OpenMM, self).initialize(argv)
         try:
+            super(OpenMM, self).initialize(argv)
             self.initialize_configured_classes()
             self.validate()
-        except TraitError as e:
+        except (TraitError, AliasError) as e:
             self.error(e)
 
     def validate(self):
