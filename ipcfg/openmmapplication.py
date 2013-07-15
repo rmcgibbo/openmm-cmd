@@ -62,13 +62,13 @@ class OpenMMApplication(Application):
         config_flags = filter(lambda a: a.startswith('--config='), argv)
         if len(config_flags) > 0:
             self.config_file_path = config_flags[0].split('=')[1]
-            #sys.argv.remove(config_flags[0])
+            argv = [a for a in argv if a != config_flags[0]]
+
         # if the user was using make_config or did not specify a path
         # to the config file, then don't error if no config file is found.
         error_on_no_config_file = not (any(a == 'make_config' for a in sys.argv) or len(config_flags) == 0)
         self.load_config_file(self.config_file_path, error_on_no_config_file)
 
-        argv = [a for a in argv if a != config_flags[0]]
         super(OpenMMApplication, self).initialize(argv)
 
 
