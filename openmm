@@ -200,6 +200,10 @@ class System(AppConfigurable):
         active_traits = ['nb_method', 'constraints', 'rigid_water', 'rand_vels']
         if self.nb_method in ['PME', 'Ewald']:
             active_traits.append('ewald_tol')
+
+        if self.nb_method != 'NoCutoff':
+            active_traits.append('cutoff')
+
         if self.rand_vels:
             active_traits.append('gen_temp')
         return active_traits
@@ -269,6 +273,7 @@ class Dynamics(AppConfigurable):
 
         if self.integrator in ['Langevin', 'VariableLangevin', 'Brownian'] or self.thermostat == 'Andersen':
             active_traits.append('temp')
+            active_traits.append('collision_rate')
         return active_traits
 
     def validate(self):
