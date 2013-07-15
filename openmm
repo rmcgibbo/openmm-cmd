@@ -7,6 +7,7 @@
 
 import os
 import sys
+import logging
 import platform
 from datetime import datetime
 
@@ -50,11 +51,30 @@ class General(AppConfigurable):
         allow_none=False, default_value='Mixed', help='''Level of numeric
         precision to use for calculations.''')
     coords = CBytes(config=True, help='''OpenMM can take a pdb...''')
+
+    # nonconfigurable traits
     pdb_file = Instance(app.PDBFile)
+    fastest_platform = CBytes(help='The name of the fastest platform on the system')
+    def _fastest_platform_default(self):
+        fastest, speed = -1, -1
+        for i in range(mm.Platform.getNumPlatforms()):
+            p = mm.Platform.getPlatform(i)
+            s = p.getSpeed()
+            if s > speed:
+                fastest = p.getName()
+                speed = s
+
+        return fastest
+
+    def active_config_traits(self):
+        values = ['forcefield', 'water', 'platform', 'coords']
+        if self.platform != 'Reference' and self.fastest_plaform in ['CUDA', 'OpenCL']:
+            values.append('precision')
+        return values
 
     def validate(self):
         self.log.debug('Running general options validations.')
-        if 'precision' in self.specified_config_traits and self.precision != 'Double' and self.platform == 'Reference':
+        if 'precision' in self.specified_config_traits and self.platform not in ['OpenCL', 'CUDA']:
             raise TraitError('Manually setting the precision is only '
                              'appropriate on the OpenCL and CUDA platforms')
 
@@ -113,21 +133,28 @@ class General(AppConfigurable):
         "Get the platform"
 
         if self.platform is 'NotSpecified':
-            self.application.script('platform = None')
-            return None
+            platform = self.fastest_platform
         else:
-            self.application.script("platform = mm.Platform.getPlatformByName('%s')" %
-                   self.platform)
-            return mm.Platform.getPlatformByName(self.platform)
+            platform = self.platform
+
+        self.application.script("platform = mm.Platform.getPlatformByName('%s')" %
+                                platform)
+        return mm.Platform.getPlatformByName(platform)
+
 
     def get_platform_properties(self):
         "Get any specified platorm properties"
 
-        if self.platform is 'NotSpecified' or self.platform == 'Reference':
+        if self.platform is 'NotSpecified':
+            platform = self.fastest_platform
+        else:
+            platform = self.platform
+
+        if platform == 'Reference':
             pp = None
-        elif self.platform == 'CUDA':
+        elif platform == 'CUDA':
             pp = {'CudaPrecision': self.precision.lower()}
-        elif self.platform == 'OpenCL':
+        elif platform == 'OpenCL':
             pp = {'OpenCLPrecision': self.precision.lower()}
         else:
             raise RuntimeError()
@@ -358,14 +385,10 @@ class OpenMM(OpenMMApplication):
     dynamics = Instance(Dynamics)
     simulation = Instance(Simulation)
 
-    log_level = Enum(
-        [0, 10, 20, 30, 40, 50, 'DEBUG', 'INFO', 'WARN', 'ERROR', 'CRITICAL'],
-        default_value='INFO', config=True, help="""Set the log level by
-         value or name.""")
     config_file_path = CBytes('config.in.ini', config=True, help="""Path to a
-    configuration file to load from. The configuration files contains settings
-    for all of the MD options. Every option can be either set in the config
-    file and/or the command line. (see `--help-all`).""")
+        configuration file to load from. The configuration files contains settings
+        for all of the MD options. Every option can be either set in the config
+        file and/or the command line. (see `--help-all`).""")
     config_file_out = CBytes('config.out.ini', config=True, help="""Write a
         config file containing all of the active options used by this
         simulation.""")
@@ -373,6 +396,13 @@ class OpenMM(OpenMMApplication):
         used to run this simulation using the OpenMM python API. This is useful
         for learning the API, and as a starting point for producing more complex
         OpenMM applications for making further customizations.""")
+    def _show_script_default(self):
+        if self.log_level in [30, 40, 'ERROR', 'CRITICAL']:
+            return False
+        return True
+    def _log_level_default(self):
+        return logging.INFO
+
     _script_initialized = CBool(False)
 
     # The alias table gives all of the options that are shown on the -h.
@@ -463,8 +493,7 @@ class OpenMM(OpenMMApplication):
         properties = self.general.get_platform_properties()
 
         self.script('simulation = app.Simulation(topology, system, integrator, platform, properties)')
-        simulation = app.Simulation(topology, system, integrator,
-                                    platform, properties)
+        simulation = app.Simulation(topology, system, integrator, platform, properties)
 
         self.script('simulation.context.setPositions(positions)')
         simulation.context.setPositions(positions)
@@ -486,8 +515,11 @@ class OpenMM(OpenMMApplication):
         if self.show_script:
             print
 
-        self.log.info('Selected Platform: %s\n',
-                      simulation.context.getPlatform().getName())
+        self.log.info('Number of available platforms: %d' % mm.Platform.getNumPlatforms())
+        self.log.info('Selected Platform: %s', platform.getName())
+        for key in platform.getPropertyNames():
+            self.log.info('%s = %s', key, platform.getPropertyValue(simulation.context, key))
+        print ''
 
         self.force_reporters(simulation, topology)
         simulation.step(self.simulation.n_steps)
@@ -565,8 +597,7 @@ class OpenMM(OpenMMApplication):
 
     def print_config(self):
         "Print a description of the config file, without comments"
-
-        if not self.log.isEnabledFor(30):
+        if not self.log.isEnabledFor(logging.INFO):
             # we need to be printing INFO or better to print the config
             return
 
