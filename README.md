@@ -9,7 +9,7 @@ supplied options.
 Features
 --------
 
-1. Units
+1. Parsing units on the command line.
   ```
   $ openmm --dt=1
   [OpenMM] WARNING | No config file was found.
@@ -18,8 +18,23 @@ Features
   use a syntax like --dt=2*femtosecond on the command line, or c.Dynamics.dt =
   2*femtosecond in the config file.
   ```
+  
+  Yes, the full power of `simtk.unit` is available. There's also some error
+  checking for commonly incorrect parameters.
+  
+  ```
+  $ openmm --dt=1*years
+  [OpenMM] WARNING | No config file was found.
+  [OpenMM] ERROR | You are likely using too large a timestep. With the
+  Langevin or Verlet integrators and bond constraints, a timestep over 2
+  femtoseconds is not recommended.
 
-2. Did you mean?
+  $ openmm --dt=0.002*angstroms
+  [OpenMM] WARNING | No config file was found.
+  [OpenMM] ERROR | The 'dt' trait of the dynamics section must have units of femtosecond, but a value in units of angstrom was specified.
+  ```
+
+2. A lot of mistakes are typos. We can help.
   ```
   $ openmm --collision_ratee=1/picoseconds
   [OpenMM] WARNING | No config file was found.
@@ -27,7 +42,9 @@ Features
   'collision_rate'?
   ```
 
-3. Ensuring that supplied configuration options actually make sense
+3. Some options have complex dependencies. If a user supplies an option, they
+   probably want it to be in effect.
+   
   ```
   $ openmm --temp=300*kelvin --integrator=Verlet --thermostat=None
   [OpenMM] WARNING | No config file was found.
