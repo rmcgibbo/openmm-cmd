@@ -67,7 +67,7 @@ class Quantity(Float):
             e = ("The '{name}' trait of {class_of} must have units of {unit}, "
                  "but a value without units, {value}, was specified. To "
                  "specify units, use a syntax like --{name}={default_value} "
-                 "on the command line, or c.{class_name}.{name} = "
+                 "on the command line, or {name} = "
                  "{default_value} in the config file.").format(
                     name=self.name, class_of=class_of(obj), unit=self.unit,
                     value=value, default_value=self.default_value,

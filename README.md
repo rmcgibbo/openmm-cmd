@@ -15,8 +15,8 @@ Features
   [OpenMM] WARNING | No config file was found.
   [OpenMM] ERROR | The 'dt' trait of the dynamics section must have units of
   femtosecond, but a value without units, 1, was specified. To specify units,
-  use a syntax like --dt=2*femtosecond on the command line, or c.Dynamics.dt =
-  2*femtosecond in the config file.
+  use a syntax like --dt=2*femtosecond on the command line, or dt = 2*femtosecond
+  in the config file.
   ```
   
   Yes, the full power of `simtk.unit` is available. There's also some error
