@@ -1,3 +1,5 @@
+"""A Quantity trait using simtk.unit
+"""
 #-----------------------------------------------------------------------------
 # Imports
 #-----------------------------------------------------------------------------
@@ -10,6 +12,7 @@ unit.nm = unit.nanometers
 unit.A = unit.angstroms
 unit.ps = unit.picoseconds
 unit.fs = unit.femtoseconds
+unit.atm = unit.atmosphere
 
 
 #-----------------------------------------------------------------------------
@@ -39,7 +42,6 @@ unit.Quantity.__repr__ = _Quantity_str
 
 
 class Quantity(Float):
-
     '''A united float trait.'''
 
     def __init__(self, default_value, **metadata):

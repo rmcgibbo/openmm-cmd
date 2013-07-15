@@ -1,9 +1,14 @@
+"""Parse units from strings with simtk.unit
+
+The function str_to_unit can retreive a complex unit or Quantity from a string.
+"""
 #-----------------------------------------------------------------------------
 # Imports
 #-----------------------------------------------------------------------------
 
 import ast
 from simtk import unit
+__all__ = ['str_to_unit']
 
 #-----------------------------------------------------------------------------
 # Functions

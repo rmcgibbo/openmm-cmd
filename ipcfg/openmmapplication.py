@@ -1,7 +1,21 @@
+"""
+Two base classes used by the openmm command line script. The first,
+AppConfigurable, is a subclass of IPython's Configurable that adds a few
+features, like stricter error checking, the concept that some of its traits
+are 'active' and some are inactive, the ability to print out config files
+in which the active traits are listed and the inactive traits are commented
+out, etc.
+
+The second class, OpenMMApplication, is a subclass of IPython's Application
+that adds some features customized for openmm, like config file parsing that's
+not based on a profile directory, but instead comes from a --config flag,
+more complex validation, and the ability to auto-initialize the classes that
+serve to hold its detailed configuration option. Those classes have their
+traits automatically aliased on the command line.
+"""
 #-----------------------------------------------------------------------------
 # Imports
 #-----------------------------------------------------------------------------
-
 
 import os
 import sys
