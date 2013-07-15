@@ -90,8 +90,8 @@ Features
 
   # OpenMM runs simulations on three platforms: Reference, CUDA, and OpenCL. If
   # not specified, the fastest available platform will be selected automatically.
-  # Choices: [Reference, OpenCL, CUDA]
-  platform = None
+  # Choices: [Reference, OpenCL, CUDA, NotSpecified]
+  platform = NotSpecified
 
   # OpenMM can take a pdb...
   coords =
@@ -279,8 +279,8 @@ Features
       Forcefield to use for the protein atoms. For details, consult the
       literature.
   --platform=<CaselessStrEnum>
-      Default: None
-      Choices: ['Reference', 'OpenCL', 'CUDA']
+      Default: 'NotSpecified'
+      Choices: ['Reference', 'OpenCL', 'CUDA', 'NotSpecified']
       OpenMM runs simulations on three platforms: Reference, CUDA, and OpenCL. If
       not specified, the fastest available platform will be selected
       automatically.
