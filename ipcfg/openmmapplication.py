@@ -120,20 +120,6 @@ class OpenMMApplication(Application):
             lines.append('')
         print os.linesep.join(lines)
 
-    def print_subcommands(self):
-        """Print the subcommand part of the help."""
-        if not self.subcommands:
-            return
-
-        lines = ["Subcommands"]
-        lines.append('-' * len(lines[0]))
-        for subc, (cls, help) in self.subcommands.iteritems():
-            lines.append(subc)
-            if help:
-                lines.append(indent(dedent(help.strip())))
-        lines.append('')
-        print os.linesep.join(lines)
-
     def print_help(self, classes=False):
         """Print the help for each Configurable class in self.classes.
 
