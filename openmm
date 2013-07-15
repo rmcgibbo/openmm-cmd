@@ -138,7 +138,7 @@ class System(AppConfigurable):
         tolerance is roughly equal to the fractional error in the forces due
         to truncating the Ewald summation.''')
     constraints = CaselessStrEnum(['None', 'HBonds', 'AllBonds', 'HAngles'],
-        default_value='HBonds', allow_none=False, config=True, help='''Applying
+        default_value='HBonds', allow_none=True, config=True, help='''Applying
         constraints to some of the atoms can enable you to take longer
         timesteps.''')
     rigid_water = Bool(True, config=True, help='''Keep water rigid. Be aware
@@ -198,7 +198,7 @@ class Dynamics(AppConfigurable):
     temp = Quantity(300 * unit.kelvin, config=True, help='''Temperature
         of the heat bath, used either by a stochastic integrator or the
         Andersen thermostat to maintain a constant temperature ensemble.''')
-    barostat = CaselessStrEnum(['MonteCarlo', 'None'], allow_none=False,
+    barostat = CaselessStrEnum(['MonteCarlo', 'None'], allow_none=True,
         config=True, default_value='None', help='''Activate a barostat for
         pressure coupling. The MC barostat requires temperature control
         (stochastic integrator or Andersen thermostat) to be in effect
@@ -208,8 +208,8 @@ class Dynamics(AppConfigurable):
     barostat_interval = Int(25, config=True, help='''The frequency (in time
         steps) at which Monte Carlo pressure changes should be attempted.
         This option is only invoked when barostat == MonteCarlo.''')
-    thermostat = CaselessStrEnum(['Andersen', 'None'], allow_none=False,
-        config=True, default_value='None', help='''Activate a thermostat to
+    thermostat = CaselessStrEnum(['Andersen', 'None'], allow_none=True,
+        config=True, default_value=None, help='''Activate a thermostat to
         maintain a constant temperature simulation.''')
     dt = Quantity(2 * unit.femtoseconds, config=True, help='''Timestep
         for fixed-timestep integrators.''')
@@ -262,7 +262,7 @@ class Dynamics(AppConfigurable):
 
         if 'pressure' in self.specified_config_traits and not self.barostat == 'MonteCarlo':
             raise TraitError("The pressure target option, 'pressure', is only "
-                             "appropriate when using the Monte Carlo barostat")
+                             "appropriate when using the Monte Carlo barostat.")
         if 'barostat_interval' in self.specified_config_traits and not self.barostat == 'MonteCarlo':
             raise TraitError("The barostat interval option, 'barostat_interval', is only "
                              "appropriate when using the Monte Carlo barostat.")
@@ -386,7 +386,7 @@ class OpenMM(OpenMMApplication):
         super(OpenMM, self).validate()
         self.log.debug('Running global options validations.')
         if self.dynamics.integrator in ['Langevin', 'Verlet']:
-            if self.system.constraints == 'None' and self.dynamics.dt > 1*unit.femtoseconds:
+            if self.system.constraints is None and self.dynamics.dt > 1*unit.femtoseconds:
                 raise TraitError('You are likely using too large a timestep. With the '
                                  'Langevin or Verlet integrators, without constraints a '
                                  'timestep over 1 femtosecond is not recommended.')
@@ -411,7 +411,7 @@ class OpenMM(OpenMMApplication):
             raise TraitError('Using periodic boundary conditions with implict solvent? '
                              'That\'s a very strange choice.  You don\'t really want '
                              'periodic boundary conditions with implicit solvent, do you?')
-        if (self.dynamics.barostat != 'None') and  (self.system.nb_method in  ['NoCutoff', 'CutoffNonPeriodic']):
+        if (self.dynamics.barostat is not None) and  (self.system.nb_method in  ['NoCutoff', 'CutoffNonPeriodic']):
             raise TraitError("It doesn't make sense to use a barostat with no cutoffs, "
                              "since %s implies you're using a nonperiodic system. But adjusting "
                              "the box volume (the way that the barostat controls the pressure) "
@@ -432,7 +432,8 @@ class OpenMM(OpenMMApplication):
         print self.dynamics.specified_config_traits
         print self.simulation.specified_config_traits
 
-        self.generate_config()
+        #self.generate_config()
+        print self.dynamics.thermostat
 
     def generate_config(self):
         """Write a configuration file containing all of the active options
