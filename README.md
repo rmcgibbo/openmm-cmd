@@ -72,134 +72,141 @@ Features
   file.
     
   ```
-  $ cat config.out.py
+  $ cat config.out.ini
   # Configuration file for openmm
-  # Generated 2013-07-14 19:13:43.543040
-  # Command line: /Library/Frameworks/EPD64.framework/Versions/7.3/bin/openmm --integrator=VariableVerlet
+  # Generated on Roberts-MacBook-Pro-2.local, 2013-07-14 22:02:53.932934
+  # Command line: /Library/Frameworks/EPD64.framework/Versions/7.3/bin/openmm
   # OpenMM version 5.1
 
-  from simtk.unit import *
-  c = get_config()
-
   #------------------------------------------------------------------------------
-  # General configuration
+  [General]
   #------------------------------------------------------------------------------
-
-  # General options for the application.
+  # General options, including the forcefield, platform, and coordinates.
+  #------------------------------------------------------------------------------
 
   # Forcefield to use for water in the simulation.
-  c.General.water = 'TIP3P'
+  # Choices: [SPC/E, TIP3P, TIP4-Ew, TIP5P, Implicit]
+  water = TIP3P
 
   # OpenMM runs simulations on three platforms: Reference, CUDA, and OpenCL. If
   # not specified, the fastest available platform will be selected automatically.
-  c.General.platform = None
+  # Choices: [Reference, OpenCL, CUDA]
+  platform = None
 
   # OpenMM can take a pdb...
-  c.General.coords = ''
+  coords =
 
   # Level of numeric precision to use for calculations.
-  c.General.precision = 'Mixed'
+  # Choices: [Single, Mixed, Double]
+  precision = Mixed
 
   # Forcefield to use for the protein atoms. For details, consult the literature.
-  c.General.forcefield = 'amber99sb-ildn'
+  # Choices: [amber96, amber99sb, amber99sb-ildn, amber99sb-nmr, amber03, amber10]
+  forcefield = amber99sb-ildn
 
   #------------------------------------------------------------------------------
-  # System configuration
+  [System]
   #------------------------------------------------------------------------------
-
-  # Parameters for the system
+  # Parameters for the system, including the method for calculating nonbonded
+  # forces, constraints, and initialization of velocities
+  #------------------------------------------------------------------------------
 
   # Cutoff for long-range non-bonded interactions. This option is usef for all
   # non-bonded methods except for "NoCutoff".
-  # c.System.cutoff = 1.0*nanometer
+  # cutoff = 1.0*nanometer
 
   # Initialize the system with random initial velocities, drawn from the Maxwell
   # Boltzmann distribution.
-  c.System.rand_vels = True
+  rand_vels = True
 
   # The error tolerance is roughly equal to the fractional error in the forces due
   # to truncating the Ewald summation.
-  c.System.ewald_tol = 0.0005
+  ewald_tol = 0.0005
 
   # Keep water rigid. Be aware that flexible water may require you to further
   # reduce the integration step size, typically to about 0.5 fs.
-  c.System.rigid_water = True
+  rigid_water = True
 
   # Temperature used for generating initial velocities. This option is only used
   # if rand_vels == True.
-  c.System.gen_temp = 300*kelvin
+  gen_temp = 300*kelvin
 
   # Method for calculating long range non-bondend interactions. Refer to the user
   # guide for a detailed discussion.
-  c.System.nb_method = 'PME'
+  # Choices: [NoCutoff, CutoffNonPeriodic, CutoffPeriodic, Ewald, PME]
+  nb_method = PME
 
   # Applying constraints to some of the atoms can enable you to take longer
   # timesteps.
-  c.System.constraints = 'HBonds'
+  # Choices: [None, HBonds, AllBonds, HAngles]
+  constraints = HBonds
 
   #------------------------------------------------------------------------------
-  # Dynamics configuration
+  [Dynamics]
   #------------------------------------------------------------------------------
-
   # Parameters for the integrator, thermostats and barostats
+  #------------------------------------------------------------------------------
 
   # Friction coefficient, for use with stochastic integrators or the Anderson
   # thermostat.
-  # c.Dynamics.collision_rate = 1.0/picosecond
+  # collision_rate = 1.0/picosecond
 
   # Activate a barostat for pressure coupling. The MC barostat requires
   # temperature control (stochastic integrator or Andersen thermostat) to be in
   # effect as well.
-  c.Dynamics.barostat = 'None'
+  # Choices: [MonteCarlo, None]
+  barostat = None
 
   # Activate a thermostat to maintain a constant temperature simulation.
-  c.Dynamics.thermostat = 'None'
+  # Choices: [Andersen, None]
+  thermostat = None
 
   # Temperature of the heat bath, used either by a stochastic integrator or the
   # Andersen thermostat to maintain a constant temperature ensemble.
-  # c.Dynamics.temp = 300*kelvin
+  temp = 300*kelvin
 
   # OpenMM offers a choice of several different integration methods. Refer to the
   # user guide for details.
-  c.Dynamics.integrator = 'VariableVerlet'
+  # Choices: [Langevin, Verlet, Brownian, VariableLangevin, VariableVerlet]
+  integrator = Langevin
 
   # Pressure target, used by a barostat.
-  # c.Dynamics.pressure = 1*atmosphere
+  # pressure = 1*atmosphere
 
   # The frequency (in time steps) at which Monte Carlo pressure changes should be
   # attempted. This option is only invoked when barostat == MonteCarlo.
-  # c.Dynamics.barostat_interval = 25
+  # barostat_interval = 25
 
   # Timestep for fixed-timestep integrators.
-  # c.Dynamics.dt = 2*femtosecond
+  dt = 2*femtosecond
 
   # Tolerance for variable timestep integrators ('VariableLangevin',
   # 'VariableVerlet'). Smaller values will produce a smaller average step size.
-  c.Dynamics.tolerance = 0.0001
+  # tolerance = 0.0001
 
   #------------------------------------------------------------------------------
-  # Simulation configuration
+  [Simulation]
   #------------------------------------------------------------------------------
-
-  # Parameters for the simulation object, including reporters, number of steps,
-  # etc
+  # Parameters for the simulation, including the mode and frequency with which
+  # files are saved to disk, the number of steps, etc.
+  #------------------------------------------------------------------------------
 
   # First perform local energy minimization, to find a local potential energy
   # minimum near the starting structure.
-  c.Simulation.minimize = True
+  minimize = True
 
   # Number of steps of simulation to run.
-  c.Simulation.n_steps = 1000
+  n_steps = 1000
 
   # Frequency, in steps, to save the state to disk in the DCD format.
-  c.Simulation.traj_freq = 1000
+  traj_freq = 1000
 
   # Frequency, in steps, to print summary statistics on the state of the
   # simulation.
-  c.Simulation.statedata_freq = 1000
+  statedata_freq = 1000
 
   # Filename to save the resulting trajectory to, in DCD format.
-  c.Simulation.traj_file = 'output.dcd'
+  traj_file = output.dcd
   ```
   
 5. If you want help, you can get it without digging up the manual.
@@ -297,7 +304,7 @@ Features
       Default: 1.0*nanometer
       Cutoff for long-range non-bonded interactions. This option is usef for all
       non-bonded methods except for "NoCutoff".
-  --ewald_tol=<Float>
+  --ewald_tol=<CFloat>
       Default: 0.0005
       The error tolerance is roughly equal to the fractional error in the forces
       due to truncating the Ewald summation.
@@ -310,11 +317,11 @@ Features
       Choices: ['NoCutoff', 'CutoffNonPeriodic', 'CutoffPeriodic', 'Ewald', 'PME']
       Method for calculating long range non-bondend interactions. Refer to the
       user guide for a detailed discussion.
-  --rand_vels=<Bool>
+  --rand_vels=<CBool>
       Default: True
       Initialize the system with random initial velocities, drawn from the Maxwell
       Boltzmann distribution.
-  --rigid_water=<Bool>
+  --rigid_water=<CBool>
       Default: True
       Keep water rigid. Be aware that flexible water may require you to further
       reduce the integration step size, typically to about 0.5 fs.
@@ -327,7 +334,7 @@ Features
       Activate a barostat for pressure coupling. The MC barostat requires
       temperature control (stochastic integrator or Andersen thermostat) to be in
       effect as well.
-  --barostat_interval=<Int>
+  --barostat_interval=<CInt>
       Default: 25
       The frequency (in time steps) at which Monte Carlo pressure changes should
       be attempted. This option is only invoked when barostat == MonteCarlo.
@@ -354,28 +361,28 @@ Features
       Default: None
       Choices: ['Andersen', 'None']
       Activate a thermostat to maintain a constant temperature simulation.
-  --tolerance=<Float>
+  --tolerance=<CFloat>
       Default: 0.0001
       Tolerance for variable timestep integrators ('VariableLangevin',
       'VariableVerlet'). Smaller values will produce a smaller average step size.
 
   Simulation options
   ------------------
-  --minimize=<Bool>
+  --minimize=<CBool>
       Default: True
       First perform local energy minimization, to find a local potential energy
       minimum near the starting structure.
-  --n_steps=<Int>
+  --n_steps=<CInt>
       Default: 1000
       Number of steps of simulation to run.
-  --statedata_freq=<Int>
+  --statedata_freq=<CInt>
       Default: 1000
       Frequency, in steps, to print summary statistics on the state of the
       simulation.
   --traj_file=<Bytes>
       Default: 'output.dcd'
       Filename to save the resulting trajectory to, in DCD format.
-  --traj_freq=<Int>
+  --traj_freq=<CInt>
       Default: 1000
       Frequency, in steps, to save the state to disk in the DCD format.
   ```

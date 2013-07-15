@@ -265,6 +265,7 @@ class AppConfigurable(LoggingConfigurable):
             # no description trait, use __doc__
             desc = getattr(self.__class__, '__doc__', '')
         if desc:
+            lines.append(breaker)
             lines.append(c(desc))
 
         lines.extend([breaker, ''])

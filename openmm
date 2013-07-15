@@ -7,6 +7,7 @@
 
 import os
 import sys
+import platform
 from datetime import datetime
 
 # openmm
@@ -33,7 +34,7 @@ class General(AppConfigurable):
         'amber99sb-nmr', 'amber03', 'amber10'], allow_none=False, config=True,
         default_value='amber99sb-ildn', help=''' Forcefield to use for the
         protein atoms. For details, consult the literature.''')
-    water = CaselessStrEnum(['SPC/E', 'TIP3P', 'TIP4-Ew', 'TIP5P', 'Implict'],
+    water = CaselessStrEnum(['SPC/E', 'TIP3P', 'TIP4-Ew', 'TIP5P', 'Implicit'],
         config=True, default_value='TIP3P', allow_none=True, help='''Forcefield
         to use for water in the simulation.''')
     platform = CaselessStrEnum(['Reference', 'OpenCL', 'CUDA'],
@@ -78,6 +79,8 @@ class General(AppConfigurable):
                 files.append('amber10_obc.xml')
             else:
                 raise RuntimeError()
+        else:
+            raise RuntimeError()
 
         script('forcefield = app.ForceField(%s)' %
                ', '.join(["'%s'" % f for f in files]))
@@ -451,17 +454,20 @@ class OpenMM(OpenMMApplication):
             self.log.warning("%s already exists. I'm trying %s", self.config_file_out, new)
             self.config_file_out = new
 
+        # create the config file
+        lines = ['# Configuration file for openmm',
+                 '# Generated on %s, %s' % (platform.node(), datetime.now()),
+                 '# OpenMM version %s.%s' % ('UNKNOWN', 'UNKNOWN'),
+                 '# Invokation command line: %s' % ' '.join(sys.argv),
+                 '']
+        lines.append(self.general.config_section())
+        lines.append(self.system.config_section())
+        lines.append(self.dynamics.config_section())
+        lines.append(self.simulation.config_section())
+
         self.log.info('Writing config file to %s' % self.config_file_out)
         with open(self.config_file_out, 'w') as f:
-            print >>f, '# Configuration file for openmm'
-            print >>f, '# Generated %s' % datetime.now()
-            print >>f, '# Command line: %s' % ' '.join(sys.argv)
-            print >>f, '# OpenMM version %s.%s' % ('UNKNOWN', 'UNKNOWN')
-            print >>f, ''
-            print >>f, self.general.config_section()
-            print >>f, self.system.config_section()
-            print >>f, self.dynamics.config_section()
-            print >>f, self.simulation.config_section()
+            print >> f, '\n'.join(lines)
 
 
 #----------------------------------------------------------------------------
