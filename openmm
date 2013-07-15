@@ -449,7 +449,7 @@ class OpenMM(OpenMMApplication):
                self.system.rigid_water, self.system.ewald_tol))
 
         system = forcefield.createSystem(topology,
-            nonbondedMethod=getattr(app, self.system.nb_method), 
+            nonbondedMethod=getattr(app, self.system.nb_method),
             nonbondedCutoff=self.system.cutoff,
             constraints=getattr(app, self.system.constraints),
             rigidWater=self.system.rigid_water,
@@ -461,14 +461,14 @@ class OpenMM(OpenMMApplication):
         integrator = self.dynamics.get_integrator()
         platform = self.general.get_platform()
         properties = self.general.get_platform_properties()
-        
+
         self.script('simulation = app.Simulation(topology, system, integrator, platform, properties)')
         simulation = app.Simulation(topology, system, integrator,
                                     platform, properties)
 
         self.script('simulation.context.setPositions(positions)')
         simulation.context.setPositions(positions)
-                
+
         if self.simulation.minimize:
             self.script('simulation.minimizeEnergy()')
             simulation.minimizeEnergy()
@@ -485,7 +485,7 @@ class OpenMM(OpenMMApplication):
         self.script('simulation.step(%s)' % self.simulation.n_steps)
         if self.show_script:
             print
-        
+
         self.log.info('Selected Platform: %s\n',
                       simulation.context.getPlatform().getName())
 
@@ -500,14 +500,14 @@ class OpenMM(OpenMMApplication):
 
         args = gets + [True, (topology.getUnitCellDimensions() is not None)]
         state = simulation.context.getState(*args)
-        
+
         for reporter in simulation.reporters:
             reporter.report(simulation, state)
-    
+
     def script(self, msg):
         if not self.show_script:
             return
-            
+
         def c(line):
             lines = wrap_paragraphs(line, 80)[0].splitlines()
             if len(lines) == 0:
@@ -521,7 +521,7 @@ class OpenMM(OpenMMApplication):
             lines = [
                 '###################################################################',
                 '# To use this script, paste all of the lines starting with the',
-                '# three less than signs (>>>) into a file, and run it with python.',
+                '# three less than signs (>>>) into a python interpreter.',
                 '###################################################################',
                 ' ',
                 'from simtk.unit import *',
@@ -531,9 +531,9 @@ class OpenMM(OpenMMApplication):
             print
             print os.linesep.join(map(c, lines))
             self._script_initialized = True
-        
+
         print c(msg)
-    
+
     def generate_config_file(self):
         """Write a configuration file containing all of the active options
         to self.config_file_out
@@ -562,10 +562,10 @@ class OpenMM(OpenMMApplication):
         with open(self.config_file_out, 'w') as f:
             print >> f, '\n'.join(lines)
 
-    
+
     def print_config(self):
         "Print a description of the config file, without comments"
-        
+
         if not self.log.isEnabledFor(30):
             # we need to be printing INFO or better to print the config
             return
@@ -574,18 +574,18 @@ class OpenMM(OpenMMApplication):
         for kls in [getattr(self, c.__name__.lower(), None) for c in self.classes]:
             if kls is None:
                 continue
-            
+
             col1.append('\n[%s]' % kls.__class__.__name__)
             col2.append('')
             for traitname in kls.active_config_traits():
                 col1.append('%s = %s' % (traitname, getattr(kls, traitname)))
-                if traitname in kls.specified_config_traits:                    
+                if traitname in kls.specified_config_traits:
                     col2.append('# your selection')
                 else:
                     col2.append('# default value')
-    
+
         width = max(len(e) for e in col1)
-        
+
         header = '# Option Summary. A more detailed config file is saved to %s' % self.config_file_out
         breaker = '#' * len(header)
         print os.linesep.join([breaker, header, breaker])
