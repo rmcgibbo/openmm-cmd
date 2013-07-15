@@ -31,7 +31,8 @@ Features
 
   $ openmm --dt=0.002*angstroms
   [OpenMM] WARNING | No config file was found.
-  [OpenMM] ERROR | The 'dt' trait of the dynamics section must have units of femtosecond, but a value in units of angstrom was specified.
+  [OpenMM] ERROR | The 'dt' trait of the dynamics section must have units 
+  of femtosecond, but a value in units of angstrom was specified.
   ```
 
 2. A lot of mistakes are typos. We can help.
@@ -201,7 +202,7 @@ Features
   c.Simulation.traj_file = 'output.dcd'
   ```
   
-5. Lots of help.
+5. If you want help, you can get it without digging up the manual.
   ```
   $ openmm -h
   
