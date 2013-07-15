@@ -155,11 +155,9 @@ class OpenMMApplication(Application):
 
     def error(self, message=None):
         if message:
-            fmt = '%s: error: %s\n' % (os.path.basename(sys.argv[0]), message)
+            self.log.error(str(message))
             self._print_message(
-                os.linesep.join(wrap_paragraphs(fmt, ncols=78)), sys.stderr)
-            self._print_message(
-                '\n\nTo see all available configurables, use `--help-all`\n', sys.stderr)
+                '\nTo see all available configurables, use `--help-all`\n', sys.stderr)
         sys.exit(2)
 
     def _print_message(self, message, file=None):
