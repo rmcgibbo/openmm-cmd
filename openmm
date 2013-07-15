@@ -12,14 +12,18 @@ from datetime import datetime
 
 # openmm
 from simtk import unit
+from simtk.openmm import app
+from simtk import openmm as mm
+from ipcfg.progressreporter import ProgressReporter
 
 # command line configuration system
 from ipcfg.extratraitlets import Quantity
 from ipcfg.openmmapplication import OpenMMApplication, AppConfigurable
-from ipcfg.IPython.traitlets import (CInt, CBool, Bytes, CaselessStrEnum,
+from ipcfg.IPython.traitlets import (CInt, CBool, CBytes, CaselessStrEnum,
                                      Instance, Enum, CFloat, TraitError)
 from ipcfg.IPython.loader import AliasError
 from ipcfg.IPython.application import Application
+from ipcfg.IPython.text import wrap_paragraphs
 
 #-----------------------------------------------------------------------------
 # Classes
@@ -45,8 +49,8 @@ class General(AppConfigurable):
     precision = CaselessStrEnum(['Single', 'Mixed', 'Double'], config=True,
         allow_none=False, default_value='Mixed', help='''Level of numeric
         precision to use for calculations.''')
-    coords = Bytes(config=True, help='''OpenMM can take a pdb...''')
-    #pdb_file = Instance(app.PDBFile)
+    coords = CBytes(config=True, help='''OpenMM can take a pdb...''')
+    pdb_file = Instance(app.PDBFile)
 
     def validate(self):
         self.log.debug('Running general options validations.')
@@ -58,7 +62,7 @@ class General(AppConfigurable):
         "Load coordinate/topology files from disk"
         if self.coords.endswith('.pdb'):
             if self.pdb_file is None:
-                script("pdb = app.PDBFile('%s')" % self.coords)
+                self.application.script("pdb = app.PDBFile('%s')" % self.coords)
                 self.pdb_file = app.PDBFile(self.coords)
         else:
             raise RuntimeError()
@@ -83,7 +87,7 @@ class General(AppConfigurable):
         else:
             raise RuntimeError()
 
-        script('forcefield = app.ForceField(%s)' %
+        self.application.script('forcefield = app.ForceField(%s)' %
                ', '.join(["'%s'" % f for f in files]))
         return app.ForceField(*files)
 
@@ -92,7 +96,7 @@ class General(AppConfigurable):
 
         self.load_coords()
         if self.pdb_file is not None:
-            script('positions = pdb.positions')
+            self.application.script('positions = pdb.positions')
             return self.pdb_file.positions
         raise RuntimeError()
 
@@ -101,7 +105,7 @@ class General(AppConfigurable):
 
         self.load_coords()
         if self.pdb_file is not None:
-            script('topology = pdb.topology')
+            self.application.script('topology = pdb.topology')
             return self.pdb_file.topology
         raise RuntimeError()
 
@@ -109,10 +113,10 @@ class General(AppConfigurable):
         "Get the platform"
 
         if self.platform is 'NotSpecified':
-            script('platform = None')
+            self.application.script('platform = None')
             return None
         else:
-            script("platform = mm.Platform.getPlatformByName('%s')" %
+            self.application.script("platform = mm.Platform.getPlatformByName('%s')" %
                    self.platform)
             return mm.Platform.getPlatformByName(self.platform)
 
@@ -128,7 +132,7 @@ class General(AppConfigurable):
         else:
             raise RuntimeError()
 
-        script('platformProperties = %s' % pp)
+        self.application.script('platformProperties = %s' % pp)
         return pp
 
 
@@ -282,22 +286,22 @@ class Dynamics(AppConfigurable):
         "Fetch the integrator"
 
         if self.integrator == 'Langevin':
-            script('integrator = mm.LangevinIntegrator(%s, %s, %s)'
+            self.application.script('integrator = mm.LangevinIntegrator(%s, %s, %s)'
                    % (self.temp, self.collision_rate, self.dt))
             return mm.LangevinIntegrator(self.temp, self.collision_rate, self.dt)
         elif self.integrator == 'Brownian':
-            script('integrator = mm.BrownianIntegrator(%s, %s, %s)'
+            self.application.script('integrator = mm.BrownianIntegrator(%s, %s, %s)'
                    % (self.temp, self.collision_rate, self.dt))
             return mm.BrownianIntegrator(self.temp, self.collision_rate, self.dt)
         elif self.integrator == 'Verlet':
-            script('integrator = mm.VerletIntegrator(%s)' % self.dt)
+            self.application.script('integrator = mm.VerletIntegrator(%s)' % self.dt)
             return mm.VerletIntegrator(self.dt)
         elif self.integrator == 'VariableVerlet':
-            script('integrator = mm.VariableVerletIntegrator(%s)' %
+            self.application.script('integrator = mm.VariableVerletIntegrator(%s)' %
                    self.tolerance)
             return VariableVerletIntegrator(self.tolerance)
         elif self.integrator == 'VariableLangevin':
-            script('integrator = mm.VariableLangevinIntegrator(%s)' %
+            self.application.script('integrator = mm.VariableLangevinIntegrator(%s)' %
                    self.tolerance)
             return VariableLangevinIntegrator(self.tolerance)
         else:
@@ -308,12 +312,12 @@ class Dynamics(AppConfigurable):
 
         forces = []
         if self.barostat == 'MonteCarlo':
-            script('system.addForce(mm.MonteCarloBarostat(%s, %s, %s)' %
+            self.application.script('system.addForce(mm.MonteCarloBarostat(%s, %s, %s)' %
                   (self.pressure, self.temp, self.barostat_interval))
             forces.append(mm.MonteCarloBarostat(self.pressure, self.temp,
                                                 self.barostat_interval))
         if self.thermostat == 'Andersen':
-            script('system.addForce(mm.AndersenThermostat(%s, %s)' %
+            self.application.script('system.addForce(mm.AndersenThermostat(%s, %s)' %
                   (self.temp, self.collision_rate))
             forces.append(
                 mm.AndersenThermostat(self.temp, self.collision_rate))
@@ -330,7 +334,7 @@ class Simulation(AppConfigurable):
     minimize = CBool(True, config=True, help='''First perform local energy
         minimization, to find a local potential energy minimum near the
         starting structure.''')
-    traj_file = Bytes('output.dcd', config=True, help='''Filename to save the
+    traj_file = CBytes('output.dcd', config=True, help='''Filename to save the
         resulting trajectory to, in DCD format.''')
     traj_freq = CInt(1000, config=True, help='''Frequency, in steps, to
         save the state to disk in the DCD format.''')
@@ -358,20 +362,26 @@ class OpenMM(OpenMMApplication):
         [0, 10, 20, 30, 40, 50, 'DEBUG', 'INFO', 'WARN', 'ERROR', 'CRITICAL'],
         default_value='INFO', config=True, help="""Set the log level by
          value or name.""")
-    config_file_path = Bytes('config.in.ini', config=True, help="""Path to a
+    config_file_path = CBytes('config.in.ini', config=True, help="""Path to a
     configuration file to load from. The configuration files contains settings
     for all of the MD options. Every option can be either set in the config
     file and/or the command line. (see `--help-all`).""")
-    config_file_out = Bytes('config.out.ini', config=True, help="""Write a
+    config_file_out = CBytes('config.out.ini', config=True, help="""Write a
         config file containing all of the active options used by this
         simulation.""")
+    show_script = CBool(True, config=True, help="""Print a script that can be
+        used to run this simulation using the OpenMM python API. This is useful
+        for learning the API, and as a starting point for producing more complex
+        OpenMM applications for making further customizations.""")
+    _script_initialized = CBool(False)
 
     # The alias table gives all of the options that are shown on the -h.
     # The other options from the general, system, dyanmics and simulation
     # configurables are only shown to the user on --help-all.
     aliases = {'log_level': 'OpenMM.log_level',
                'out': 'OpenMM.config_file_out',
-               'config': 'OpenMM.config_file_path'}
+               'config': 'OpenMM.config_file_path',
+               'script': 'OpenMM.show_script'}
 
     def initialize(self, argv=None):
         """Initialize this class. Parses the configuration file, loads up
@@ -425,29 +435,111 @@ class OpenMM(OpenMMApplication):
                              "will have no effect." % self.system.nb_method)
 
     def start(self):
-        print 'starting!'
+        self.print_config()
+        self.generate_config_file()
 
-        print 'Active Options'
-        print self.general.active_config_traits()
-        print self.system.active_config_traits()
-        print self.dynamics.active_config_traits()
-        print self.simulation.active_config_traits()
+        topology = self.general.get_topology()
+        positions = self.general.get_positions()
+        forcefield = self.general.get_forcefield()
 
-        print '\nSpecified Options'
-        print self.general.specified_config_traits
-        print self.system.specified_config_traits
-        print self.dynamics.specified_config_traits
-        print self.simulation.specified_config_traits
+        self.script('system = forcefield.createSystem(topology, nonbondedMethod=%s, '
+               'nonbondedCutoff=%s, constraints=%s, rigidWater=%s, '
+               'ewaldErrorTolerance=%s)' % (self.system.nb_method,
+               self.system.cutoff, self.system.constraints,
+               self.system.rigid_water, self.system.ewald_tol))
 
-        #print self.simulation.n_steps
+        system = forcefield.createSystem(topology,
+            nonbondedMethod=getattr(app, self.system.nb_method), 
+            nonbondedCutoff=self.system.cutoff,
+            constraints=getattr(app, self.system.constraints),
+            rigidWater=self.system.rigid_water,
+            ewaldErrorTolerance=self.system.ewald_tol)
 
-        self.generate_config()
-        #print self.dynamics.config_section()
+        for force in self.dynamics.get_forces():
+            system.addForce(force)
 
-    def generate_config(self):
+        integrator = self.dynamics.get_integrator()
+        platform = self.general.get_platform()
+        properties = self.general.get_platform_properties()
+        
+        self.script('simulation = app.Simulation(topology, system, integrator, platform, properties)')
+        simulation = app.Simulation(topology, system, integrator,
+                                    platform, properties)
+
+        self.script('simulation.context.setPositions(positions)')
+        simulation.context.setPositions(positions)
+                
+        if self.simulation.minimize:
+            self.script('simulation.minimizeEnergy()')
+            simulation.minimizeEnergy()
+
+        if self.system.rand_vels:
+            self.script('simulation.context.setVelocitiesToTemperature()')
+            simulation.context.setVelocitiesToTemperature(self.system.gen_temp)
+
+        self.script('simulation.reporters.append(ProgressReporter(sys.stdout, %s, %s))'
+            % (self.simulation.statedata_freq, self.simulation.n_steps))
+        simulation.reporters.append(ProgressReporter(sys.stdout,
+            self.simulation.statedata_freq, self.simulation.n_steps))
+
+        self.script('simulation.step(%s)' % self.simulation.n_steps)
+        if self.show_script:
+            print
+        
+        self.log.info('Selected Platform: %s\n',
+                      simulation.context.getPlatform().getName())
+
+        self.force_reporters(simulation, topology)
+        simulation.step(self.simulation.n_steps)
+
+    def force_reporters(self, simulation, topology):
+        """Force all of the reporters on the simulation to run."""
+        gets = [False, False, False, False]
+        for reporter in simulation.reporters:
+            gets = [(a or b) for a, b in zip(gets, reporter.describeNextReport(simulation)[1:])]
+
+        args = gets + [True, (topology.getUnitCellDimensions() is not None)]
+        state = simulation.context.getState(*args)
+        
+        for reporter in simulation.reporters:
+            reporter.report(simulation, state)
+    
+    def script(self, msg):
+        if not self.show_script:
+            return
+            
+        def c(line):
+            lines = wrap_paragraphs(line, 80)[0].splitlines()
+            if len(lines) == 0:
+                lines = ['']
+            lines[0] = '>>> ' + lines[0]
+            for i in range(1, len(lines)):
+                lines[i] = '... ' + lines[i]
+            return os.linesep.join(lines)
+
+        if not self._script_initialized:
+            lines = [
+                '###################################################################',
+                '# To use this script, paste all of the lines starting with the',
+                '# three less than signs (>>>) into a file, and run it with python.',
+                '###################################################################',
+                ' ',
+                'from simtk.unit import *',
+                'from simtk import openmm as mm',
+                'from simtk.openmm import app',
+                ' ']
+            print
+            print os.linesep.join(map(c, lines))
+            self._script_initialized = True
+        
+        print c(msg)
+    
+    def generate_config_file(self):
         """Write a configuration file containing all of the active options
         to self.config_file_out
         """
+        if self.config_file_out == '':
+            return
 
         while os.path.exists(self.config_file_out):
             new = increment_outfn(self.config_file_out,
@@ -458,7 +550,7 @@ class OpenMM(OpenMMApplication):
         # create the config file
         lines = ['# Configuration file for openmm',
                  '# Generated on %s, %s' % (platform.node(), datetime.now()),
-                 '# OpenMM version %s.%s' % ('UNKNOWN', 'UNKNOWN'),
+                 '# OpenMM version %s' % mm.Platform.getOpenMMVersion(),
                  '# Invokation command line: %s' % ' '.join(sys.argv),
                  '']
         lines.append(self.general.config_section())
@@ -469,6 +561,36 @@ class OpenMM(OpenMMApplication):
         self.log.info('Writing config file to %s' % self.config_file_out)
         with open(self.config_file_out, 'w') as f:
             print >> f, '\n'.join(lines)
+
+    
+    def print_config(self):
+        "Print a description of the config file, without comments"
+        
+        if not self.log.isEnabledFor(30):
+            # we need to be printing INFO or better to print the config
+            return
+
+        col1, col2 = [], []
+        for kls in [getattr(self, c.__name__.lower(), None) for c in self.classes]:
+            if kls is None:
+                continue
+            
+            col1.append('\n[%s]' % kls.__class__.__name__)
+            col2.append('')
+            for traitname in kls.active_config_traits():
+                col1.append('%s = %s' % (traitname, getattr(kls, traitname)))
+                if traitname in kls.specified_config_traits:                    
+                    col2.append('# your selection')
+                else:
+                    col2.append('# default value')
+    
+        width = max(len(e) for e in col1)
+        
+        header = '# Option Summary. A more detailed config file is saved to %s' % self.config_file_out
+        breaker = '#' * len(header)
+        print os.linesep.join([breaker, header, breaker])
+        print os.linesep.join(opt.ljust(width) + '  ' + comment for opt, comment in zip(col1, col2))
+        print ''
 
 
 #----------------------------------------------------------------------------
