@@ -300,9 +300,10 @@ class Application(SingletonConfigurable):
         lines = ['Options']
         lines.append('-'*len(lines[0]))
         lines.append('')
-        for p in wrap_paragraphs(self.option_description):
-            lines.append(p)
-            lines.append('')
+        if self.option_description:
+            for p in wrap_paragraphs(self.option_description):
+                lines.append(p)
+                lines.append('')
         print os.linesep.join(lines)
         self.print_flag_help()
         self.print_alias_help()

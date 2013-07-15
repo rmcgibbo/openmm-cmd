@@ -9,7 +9,7 @@ import copy
 
 
 from .IPython import traitlets
-from .IPython.traitlets import Bytes, Instance, List, TraitError
+from .IPython.traitlets import Bytes, Instance, List, TraitError, Unicode
 from .IPython.application import Application
 from .IPython.configurable import LoggingConfigurable
 from .IPython.text import indent, dedent, wrap_paragraphs
@@ -51,6 +51,7 @@ class OpenMMApplication(Application):
     for printing the help text and loading the config file (boring stuff)
     """
     configured_classes = List()
+    option_description = Unicode('')
 
     def initialize(self, argv=None):
         '''Do the first steps to configure the application, including
