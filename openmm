@@ -37,10 +37,11 @@ class General(AppConfigurable):
     water = CaselessStrEnum(['SPC/E', 'TIP3P', 'TIP4-Ew', 'TIP5P', 'Implicit'],
         config=True, default_value='TIP3P', allow_none=True, help='''Forcefield
         to use for water in the simulation.''')
-    platform = CaselessStrEnum(['Reference', 'OpenCL', 'CUDA'],
-        allow_none=True, help='''OpenMM runs simulations on three platforms:
-        Reference, CUDA, and OpenCL. If not specified, the fastest available
-        platform will be selected automatically.''', config=True)
+    platform = CaselessStrEnum(['Reference', 'OpenCL', 'CUDA', 'NotSpecified'],
+        default_value='NotSpecified', allow_none=False, help='''OpenMM runs
+        simulations on three platforms: Reference, CUDA, and OpenCL. If not
+        specified, the fastest available platform will be selected
+        automatically.''', config=True)
     precision = CaselessStrEnum(['Single', 'Mixed', 'Double'], config=True,
         allow_none=False, default_value='Mixed', help='''Level of numeric
         precision to use for calculations.''')
@@ -107,7 +108,7 @@ class General(AppConfigurable):
     def get_platform(self):
         "Get the platform"
 
-        if self.platform is None:
+        if self.platform is 'NotSpecified':
             script('platform = None')
             return None
         else:
@@ -118,7 +119,7 @@ class General(AppConfigurable):
     def get_platform_properties(self):
         "Get any specified platorm properties"
 
-        if self.platform is None or self.platform == 'Reference':
+        if self.platform is 'NotSpecified' or self.platform == 'Reference':
             pp = None
         elif self.platform == 'CUDA':
             pp = {'CudaPrecision': self.precision.lower()}
