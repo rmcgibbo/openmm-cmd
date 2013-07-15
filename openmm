@@ -1,9 +1,13 @@
+#!/usr/bin/env python
 #-----------------------------------------------------------------------------
 # Imports
 #-----------------------------------------------------------------------------
 
 import os
 import sys
+from datetime import datetime
+
+# openmm
 from simtk import unit
 
 # command line configuration system
@@ -19,7 +23,6 @@ from ipcfg.IPython.application import Application
 
 
 class General(AppConfigurable):
-
     """General options for the application.
     """
 
@@ -41,6 +44,7 @@ class General(AppConfigurable):
     #pdb_file = Instance(app.PDBFile)
 
     def validate(self):
+        self.log.debug('Running general options validations.')
         if 'precision' in self.specified_config_traits and self.precision != 'Double' and self.platform == 'Reference':
             raise TraitError('Manually setting the precision is only '
                              'appropriate on the OpenCL and CUDA platforms')
@@ -122,7 +126,6 @@ class General(AppConfigurable):
 
 
 class System(AppConfigurable):
-
     "Parameters for the system"
 
     nb_method = CaselessStrEnum(['NoCutoff', 'CutoffNonPeriodic',
@@ -165,6 +168,7 @@ class System(AppConfigurable):
     def validate(self):
         """Run some validation checks.
         """
+        self.log.debug('Running system options validations.')
         # note that many of these checks are sort of redundant with the computation
         # of the active traits, but they provide a nicer english explanation of
         # what's wrong with the configuration, which is important for the user.
@@ -177,7 +181,6 @@ class System(AppConfigurable):
                              "is only appropriate when 'rand_vels' is True")
 
 class Dynamics(AppConfigurable):
-
     "Parameters for the integrator, thermostats and barostats"
 
     integrator = CaselessStrEnum(['Langevin', 'Verlet', 'Brownian',
@@ -232,6 +235,7 @@ class Dynamics(AppConfigurable):
     def validate(self):
         """Run some validation checks.
         """
+        self.log.debug('Running dynamics options validations.')
         # note that many of these checks are sort of redundant with the computation
         # of the active traits, but they provide a nicer english explanation of
         # what's wrong with the configuration, which is important for the user.
@@ -310,8 +314,8 @@ class Dynamics(AppConfigurable):
 
 
 class Simulation(AppConfigurable):
-
-    "Parameters for the simulation object, including reporters, number of steps, etc"
+    """Parameters for the simulation object, including reporters, number of
+    steps, etc"""
 
     n_steps = Int(1000, config=True,
                   help='''Number of steps of simulation to run.''')
@@ -326,34 +330,7 @@ class Simulation(AppConfigurable):
         to print summary statistics on the state of the simulation.''')
 
     def validate(self):
-        pass
-
-
-class MakeConfig(Application):
-
-    "Subapplication that creates and saves a config file"
-
-    def start(self, config_file_path):
-
-        # all lines of the new config file
-        lines = ['# Configuration file for openmm.']
-        lines.append('')
-        lines.append('from simtk.unit import *')
-        lines.append('c = get_config()')
-        lines.append('')
-
-        for cls in filter(lambda c: c != OpenMM, OpenMM.classes):
-            lines.append(cls.class_config_section())
-
-        if os.path.exists(config_file_path):
-            self.log.error("%s already exists. I don't want to overwrite it, "
-                           "so I'm backing off...", config_file_path)
-            sys.exit(1)
-
-        print('Saving new template config file to %s' % config_file_path)
-
-        with open(config_file_path, 'w') as f:
-            f.write(os.linesep.join(lines))
+        self.log.debug('Running simulation options validations.')
 
 
 class OpenMM(OpenMMApplication):
@@ -369,15 +346,29 @@ class OpenMM(OpenMMApplication):
     dynamics = Instance(Dynamics)
     simulation = Instance(Simulation)
 
-    subcommands = {'make_config': (MakeConfig,
-                                   '''Make a template input configuration file''')}
-
     log_level = Enum(
-        (0, 10, 20, 30, 40, 50, 'DEBUG', 'INFO', 'WARN', 'ERROR', 'CRITICAL'),
+        [0, 10, 20, 30, 40, 50, 'DEBUG', 'INFO', 'WARN', 'ERROR', 'CRITICAL'],
         default_value='INFO', config=True, help="""Set the log level by
          value or name.""")
+    config_file_path = Bytes('config.in.py', config=True, help="""Path to a
+    configuration file to load from. The configuration files contains settings
+    for all of the MD options. Every option can be either set in the config
+    file and/or the command line. (see `--help-all`).""")
+    config_file_out = Bytes('config.out.py', config=True, help="""Write a
+        config file containing all of the active options used by this
+        simulation.""")
+
+    # The alias table gives all of the options that are shown on the -h.
+    # The other options from the general, system, dyanmics and simulation
+    # configurables are only shown to the user on --help-all.
+    aliases = {'log_level': 'OpenMM.log_level',
+               'out': 'OpenMM.config_file_out',
+               'config': 'OpenMM.config_file_path'}
 
     def initialize(self, argv=None):
+        """Initialize this class. Parses the configuration file, loads up
+        all of the configured classes, runs validation methods, etc.
+        """
         super(OpenMM, self).initialize(argv)
         try:
             self.initialize_configured_classes()
@@ -392,6 +383,7 @@ class OpenMM(OpenMMApplication):
         for it to run its within-class validations.
         """
         super(OpenMM, self).validate()
+        self.log.debug('Running global options validations.')
         if self.dynamics.integrator in ['Langevin', 'Verlet']:
             if self.system.constraints == 'None' and self.dynamics.dt > 1*unit.femtoseconds:
                 raise TraitError('You are likely using too large a timestep. With the '
@@ -425,10 +417,6 @@ class OpenMM(OpenMMApplication):
                              "will have no effect." % self.system.nb_method)
 
     def start(self):
-        if self.subapp is not None:
-            return self.subapp.start(self.config_file_path)
-
-
         print 'starting!'
 
         print 'Active Options'
@@ -442,12 +430,49 @@ class OpenMM(OpenMMApplication):
         print self.system.specified_config_traits
         print self.dynamics.specified_config_traits
         print self.simulation.specified_config_traits
-        #import IPython as ip
-        #ip.embed()
+
+        self.generate_config()
+
+    def generate_config(self):
+        """Write a configuration file containing all of the active options
+        to self.config_file_out
+        """
+
+        while os.path.exists(self.config_file_out):
+            new = increment_outfn(self.config_file_out,
+                                self.__class__.config_file_out.default_value)
+            self.log.warning("%s already exists. I'm trying %s", self.config_file_out, new)
+            self.config_file_out = new
+
+        self.log.info('Writing config file to %s' % self.config_file_out)
+        with open(self.config_file_out, 'w') as f:
+            print >>f, '# Configuration file for openmm'
+            print >>f, '# Generated %s' % datetime.now()
+            print >>f, '# Command line: %s' % ' '.join(sys.argv)
+            print >>f, '# OpenMM version %s.%s' % ('UNKNOWN', 'UNKNOWN')
+            print >>f, ''
+            print >>f, 'from simtk.unit import *'
+            print >>f, 'c = get_config()'
+            print >>f, ''
+            print >>f, self.general.config_section()
+            print >>f, self.system.config_section()
+            print >>f, self.dynamics.config_section()
+            print >>f, self.simulation.config_section()
 
 
+#----------------------------------------------------------------------------
+# Utilities
+#----------------------------------------------------------------------------
+def increment_outfn(fn, default):
+    """Increment the name of an output file"""
+    if fn == default:
+        a, b = os.path.splitext(fn)
+        return a + '.1' + b
 
-
+    a, c = os.path.splitext(fn)
+    a, b = os.path.splitext(a)
+    b = '.%s' % (int(b[1:]) + 1)
+    return a + b + c
 
 if __name__ == '__main__':
     OpenMM.launch_instance()

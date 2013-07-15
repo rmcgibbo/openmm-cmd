@@ -4,6 +4,7 @@
 
 
 import os
+import copy
 import sys
 
 from .IPython import traitlets
@@ -48,8 +49,6 @@ class OpenMMApplication(Application):
     """Baseclass for the OpenMM application script, with the methods
     for printing the help text and loading the config file (boring stuff)
     """
-
-    config_file_path = Bytes('openmm_config.py')
     configured_classes = List()
 
     def initialize(self, argv=None):
@@ -57,21 +56,25 @@ class OpenMMApplication(Application):
         finding and loading the configuration file'''
         # load the config file before parsing argv so that
         # the command line options override the config file options
-        config_flags = filter(lambda a: a.startswith('--config='), sys.argv)
+        if argv is None:
+            argv = copy.copy(sys.argv)
+        config_flags = filter(lambda a: a.startswith('--config='), argv)
         if len(config_flags) > 0:
             self.config_file_path = config_flags[0].split('=')[1]
-            sys.argv.remove(config_flags[0])
+            #sys.argv.remove(config_flags[0])
         # if the user was using make_config or did not specify a path
         # to the config file, then don't error if no config file is found.
         error_on_no_config_file = not (any(a == 'make_config' for a in sys.argv) or len(config_flags) == 0)
         self.load_config_file(self.config_file_path, error_on_no_config_file)
+
+        argv = [a for a in argv if a != config_flags[0]]
 
         super(OpenMMApplication, self).initialize(argv)
 
     def initialize_configured_classes(self):
         for klass in filter(lambda c: c != self.__class__, self.classes):
             traitname = klass.__name__.lower()
-
+            self.log.debug('Initializing %s options from config/command line.' % traitname)
             trait = self.class_traits()[traitname]
             if trait is None:
                 raise AttributeError(
@@ -128,20 +131,6 @@ class OpenMMApplication(Application):
                 lines.append(indent(dedent(help.strip())))
         lines.append('')
         print os.linesep.join(lines)
-
-    def print_options(self):
-        if not self.flags and not self.aliases:
-            return
-        lines = ['Options']
-        lines.append('-' * len(lines[0]))
-        lines.append('--config=<String>')
-        lines.append('    Default: openmm_config.py')
-        lines.append(
-            '    Path to a configuration file to load from (or to save to, if using `make_config`).')
-        print os.linesep.join(lines)
-        self.print_flag_help()
-        self.print_alias_help()
-        print
 
     def print_help(self, classes=False):
         """Print the help for each Configurable class in self.classes.
@@ -236,7 +225,7 @@ class AppConfigurable(LoggingConfigurable):
 
     def config_section(self):
         """Get the config section with all of the activly selected options
-        placed in (not commented out as in class_config_section)"""
+        placed in (not commented out as in cls.class_config_section)"""
 
         def c(s):
             """return a commented, wrapped block."""
@@ -259,10 +248,12 @@ class AppConfigurable(LoggingConfigurable):
             lines.append(c(desc))
             lines.append('')
 
+        active_config_traits = self.active_config_traits()
+
         for name, trait in self.__class__.class_traits(config=True).iteritems():
             help = trait.get_metadata('help') or ''
             lines.append(c(help))
-            if name in self.active:
+            if name in active_config_traits:
                 lines.append('c.%s.%s = %r' %
                              (self.__class__.__name__, name, getattr(self, name)))
             else:
