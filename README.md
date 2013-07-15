@@ -213,6 +213,9 @@ Features
   To see all available configurables, use `--help-all`
   ```
 
+  All the available configurables? There are quite a few. This the same
+  help text shown in the config file.
+  
   ```
   $ openmm --help-all
   
