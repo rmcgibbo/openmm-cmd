@@ -15,8 +15,8 @@ from simtk import unit
 # command line configuration system
 from ipcfg.extratraitlets import Quantity
 from ipcfg.openmmapplication import OpenMMApplication, AppConfigurable
-from ipcfg.IPython.traitlets import (Int, Bool, Bytes, CaselessStrEnum,
-                                     Instance, Enum, Float, TraitError)
+from ipcfg.IPython.traitlets import (CInt, CBool, Bytes, CaselessStrEnum,
+                                     Instance, Enum, CFloat, TraitError)
 from ipcfg.IPython.loader import AliasError
 from ipcfg.IPython.application import Application
 
@@ -26,7 +26,7 @@ from ipcfg.IPython.application import Application
 
 
 class General(AppConfigurable):
-    """General options for the application.
+    """General options, including the forcefield, platform, and coordinates.
     """
 
     forcefield = CaselessStrEnum(['amber96', 'amber99sb', 'amber99sb-ildn',
@@ -129,27 +129,28 @@ class General(AppConfigurable):
 
 
 class System(AppConfigurable):
-    "Parameters for the system"
+    """Parameters for the system, including the method for calculating nonbonded
+    forces, constraints, and initialization of velocities"""
 
     nb_method = CaselessStrEnum(['NoCutoff', 'CutoffNonPeriodic',
         'CutoffPeriodic', 'Ewald', 'PME'], config=True, default_value='PME',
         allow_none=False, help='''Method for calculating long range
         non-bondend interactions. Refer to the user guide for a detailed
         discussion.''')
-    ewald_tol = Float(0.0005, config=True, allow_none=False, help='''The error
+    ewald_tol = CFloat(0.0005, config=True, allow_none=False, help='''The error
         tolerance is roughly equal to the fractional error in the forces due
         to truncating the Ewald summation.''')
     constraints = CaselessStrEnum(['None', 'HBonds', 'AllBonds', 'HAngles'],
         default_value='HBonds', allow_none=True, config=True, help='''Applying
         constraints to some of the atoms can enable you to take longer
         timesteps.''')
-    rigid_water = Bool(True, config=True, help='''Keep water rigid. Be aware
+    rigid_water = CBool(True, config=True, help='''Keep water rigid. Be aware
         that flexible water may require you to further reduce the integration
         step size, typically to about 0.5 fs.''')
     cutoff = Quantity(1.0 * unit.nanometers, config=True,
         help='''Cutoff for long-range non-bonded interactions. This option is
         usef for all non-bonded methods except for "NoCutoff".''')
-    rand_vels = Bool(True, config=True, help='''Initialize the system
+    rand_vels = CBool(True, config=True, help='''Initialize the system
         with random initial velocities, drawn from the Maxwell Boltzmann
         distribution.''')
     gen_temp = Quantity(300 * unit.kelvin, config=True, help='''Temperature
@@ -191,7 +192,7 @@ class Dynamics(AppConfigurable):
         default_value='Langevin', help='''OpenMM offers a choice of several
         different integration methods. Refer to the user guide for
         details.''')
-    tolerance = Float(0.0001, config=True, help='''Tolerance for variable
+    tolerance = CFloat(0.0001, config=True, help='''Tolerance for variable
         timestep integrators ('VariableLangevin', 'VariableVerlet'). Smaller
         values will produce a smaller average step size.''')
     collision_rate = Quantity(1.0 / unit.picoseconds, config=True,
@@ -207,7 +208,7 @@ class Dynamics(AppConfigurable):
         as well.''')
     pressure = Quantity(1 * unit.atmosphere, config=True, help='''Pressure
         target, used by a barostat.''')
-    barostat_interval = Int(25, config=True, help='''The frequency (in time
+    barostat_interval = CInt(25, config=True, help='''The frequency (in time
         steps) at which Monte Carlo pressure changes should be attempted.
         This option is only invoked when barostat == MonteCarlo.''')
     thermostat = CaselessStrEnum(['Andersen', 'None'], allow_none=True,
@@ -317,19 +318,19 @@ class Dynamics(AppConfigurable):
 
 
 class Simulation(AppConfigurable):
-    """Parameters for the simulation object, including reporters, number of
-    steps, etc"""
+    """Parameters for the simulation, including the mode and frequency
+    with which files are saved to disk, the number of steps, etc."""
 
-    n_steps = Int(1000, config=True,
+    n_steps = CInt(1000, config=True,
                   help='''Number of steps of simulation to run.''')
-    minimize = Bool(True, config=True, help='''First perform local energy
+    minimize = CBool(True, config=True, help='''First perform local energy
         minimization, to find a local potential energy minimum near the
         starting structure.''')
     traj_file = Bytes('output.dcd', config=True, help='''Filename to save the
         resulting trajectory to, in DCD format.''')
-    traj_freq = Int(1000, config=True, help='''Frequency, in steps, to
+    traj_freq = CInt(1000, config=True, help='''Frequency, in steps, to
         save the state to disk in the DCD format.''')
-    statedata_freq = Int(1000, config=True, help='''Frequency, in steps,
+    statedata_freq = CInt(1000, config=True, help='''Frequency, in steps,
         to print summary statistics on the state of the simulation.''')
 
     def validate(self):
@@ -353,11 +354,11 @@ class OpenMM(OpenMMApplication):
         [0, 10, 20, 30, 40, 50, 'DEBUG', 'INFO', 'WARN', 'ERROR', 'CRITICAL'],
         default_value='INFO', config=True, help="""Set the log level by
          value or name.""")
-    config_file_path = Bytes('config.in.py', config=True, help="""Path to a
+    config_file_path = Bytes('config.in.ini', config=True, help="""Path to a
     configuration file to load from. The configuration files contains settings
     for all of the MD options. Every option can be either set in the config
     file and/or the command line. (see `--help-all`).""")
-    config_file_out = Bytes('config.out.py', config=True, help="""Write a
+    config_file_out = Bytes('config.out.ini', config=True, help="""Write a
         config file containing all of the active options used by this
         simulation.""")
 
@@ -434,8 +435,10 @@ class OpenMM(OpenMMApplication):
         print self.dynamics.specified_config_traits
         print self.simulation.specified_config_traits
 
-        #self.generate_config()
-        print self.dynamics.thermostat
+        #print self.simulation.n_steps
+
+        self.generate_config()
+        #print self.dynamics.config_section()
 
     def generate_config(self):
         """Write a configuration file containing all of the active options
@@ -454,9 +457,6 @@ class OpenMM(OpenMMApplication):
             print >>f, '# Generated %s' % datetime.now()
             print >>f, '# Command line: %s' % ' '.join(sys.argv)
             print >>f, '# OpenMM version %s.%s' % ('UNKNOWN', 'UNKNOWN')
-            print >>f, ''
-            print >>f, 'from simtk.unit import *'
-            print >>f, 'c = get_config()'
             print >>f, ''
             print >>f, self.general.config_section()
             print >>f, self.system.config_section()

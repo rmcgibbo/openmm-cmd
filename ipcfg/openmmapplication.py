@@ -28,6 +28,7 @@ from .IPython.application import Application
 from .IPython.configurable import LoggingConfigurable
 from .IPython.text import indent, dedent, wrap_paragraphs
 from .IPython.loader import ConfigFileNotFound
+from .ini_loader import IniFileConfigLoader
 
 #-----------------------------------------------------------------------------
 # Dirty Hacks
@@ -82,7 +83,7 @@ class OpenMMApplication(Application):
         # if the user was using make_config or did not specify a path
         # to the config file, then don't error if no config file is found.
         error_on_no_config_file = not (any(a == 'make_config' for a in sys.argv) or len(config_flags) == 0)
-        self.load_config_file(self.config_file_path, error_on_no_config_file)
+        self.load_config_file(self.config_file_path, error_on_not_exists=error_on_no_config_file)
 
         super(OpenMMApplication, self).initialize(argv)
 
@@ -118,17 +119,21 @@ class OpenMMApplication(Application):
         for cls in self.configured_classes:
             cls.validate()
 
-    def load_config_file(self, path, error_on_not_exists=False):
+    def load_config_file(self, filename, path=None, error_on_not_exists=False):
+        """Load a .py based config file by filename and path."""
+        loader = IniFileConfigLoader(filename, path=path)
         try:
-            xpath = os.path.abspath(os.path.expanduser(path))
-            if not os.path.exists(path) and error_on_not_exists:
-                self.error('File does not exist: %s' % path)
-            dirname = os.path.dirname(xpath)
-            basename = os.path.basename(xpath)
-            super(OpenMMApplication, self).load_config_file(basename, [dirname])
-            self.log.info('Config file was found!')
-        except ConfigFileNotFound:
-            self.log.warning('No config file was found.')
+            config = loader.load_config()
+        except ConfigFileNotFound as e:
+            # problem finding the file, raise
+            if error_on_not_exists:
+                self.error(e)
+        except Exception as e:
+            self.error(e, header=True)
+        else:
+            self.log.debug("Loaded config file: %s", loader.full_filename)
+            self.update_config(config)
+
 
     def print_description(self):
         "Print the application description"
@@ -161,7 +166,12 @@ class OpenMMApplication(Application):
             print "To see all available configurables, use `--help-all`"
             print
 
-    def error(self, message=None):
+    def error(self, message=None, header=False):
+        "Error out with a message"
+        if header:
+            self.print_description()
+            self.print_help()
+
         if message:
             self.log.error(str(message))
             self._print_message(
@@ -232,8 +242,9 @@ class AppConfigurable(LoggingConfigurable):
         pass
 
     def config_section(self):
-        """Get the config section with all of the activly selected options
-        placed in (not commented out as in cls.class_config_section)"""
+        """Get the config section with all of the active configurable traits
+        placed in, and the inactive configurable traits commented out, in .ini
+        format"""
 
         def c(s):
             """return a commented, wrapped block."""
@@ -243,8 +254,9 @@ class AppConfigurable(LoggingConfigurable):
 
         # section header
         breaker = '#' + '-' * 78
-        s = "# %s configuration" % self.__class__.__name__
-        lines = [breaker, s, breaker, '']
+        klass = self.__class__.__name__
+        lines = [breaker, '[%s]' % klass]
+
         # get the description trait
         desc = self.__class__.class_traits().get('description')
         if desc:
@@ -254,19 +266,23 @@ class AppConfigurable(LoggingConfigurable):
             desc = getattr(self.__class__, '__doc__', '')
         if desc:
             lines.append(c(desc))
-            lines.append('')
 
+        lines.extend([breaker, ''])
+
+        # all of the configurable traits that are currently activayed
         active_config_traits = self.active_config_traits()
 
         for name, trait in self.__class__.class_traits(config=True).iteritems():
             help = trait.get_metadata('help') or ''
             lines.append(c(help))
+            if 'Enum' in trait.__class__.__name__:
+                lines.append(c(indent('Choices: [%s]' % (', '.join(trait.values,)))))
+
+            item = '%s = %s' % (name, getattr(self, name))
             if name in active_config_traits:
-                lines.append('c.%s.%s = %r' %
-                             (self.__class__.__name__, name, getattr(self, name)))
+                lines.append(item)
             else:
-                lines.append('# c.%s.%s = %r' %
-                             (self.__class__.__name__, name, trait.get_default_value()))
+                lines.append(c(item))
             lines.append('')
         return '\n'.join(lines)
 

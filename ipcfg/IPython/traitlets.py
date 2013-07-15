@@ -104,7 +104,7 @@ def add_article ( name ):
     prefixed to the specified string.
     """
     if name[:1].lower() in 'aeiou':
-       return 'an ' + name
+        return 'an ' + name
 
     return 'a ' + name
 
@@ -1110,7 +1110,7 @@ class Enum(TraitType):
                 return value
 
         if value in self.values:
-                return value
+            return value
         self.error(obj, value)
 
     def info(self):
@@ -1125,9 +1125,8 @@ class CaselessStrEnum(Enum):
     """An enum of strings that are caseless in validate."""
 
     def validate(self, obj, value):
-        if value is None:
-            if self._allow_none:
-                return value
+        if self._allow_none and value in [None, 'None']:
+            return None
 
         if not isinstance(value, basestring):
             self.error(obj, value)
@@ -1135,6 +1134,7 @@ class CaselessStrEnum(Enum):
         for v in self.values:
             if v.lower() == value.lower():
                 return v
+
         self.error(obj, value)
 
     def error(self, obj, value):
