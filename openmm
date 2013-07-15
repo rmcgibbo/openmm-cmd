@@ -85,7 +85,8 @@ class General(AppConfigurable):
                 self.application.script("pdb = app.PDBFile('%s')" % self.coords)
                 self.pdb_file = app.PDBFile(self.coords)
         else:
-            raise RuntimeError()
+            raise NotImplementedError('Currently, only reading from pdb files '
+                                      'is implmenented')
 
     def get_forcefield(self):
         "Create the forcefield object"
@@ -103,9 +104,9 @@ class General(AppConfigurable):
             elif self.forcefield == 'amber10':
                 files.append('amber10_obc.xml')
             else:
-                raise RuntimeError()
+                raise RuntimeError('unkown protein model')
         else:
-            raise RuntimeError()
+            raise RuntimeError('unknown water model')
 
         self.application.script('forcefield = app.ForceField(%s)' %
                ', '.join(["'%s'" % f for f in files]))
@@ -118,7 +119,7 @@ class General(AppConfigurable):
         if self.pdb_file is not None:
             self.application.script('positions = pdb.positions')
             return self.pdb_file.positions
-        raise RuntimeError()
+        raise RuntimeError('only loading pdbs currently supported')
 
     def get_topology(self):
         "Get the system topology"
@@ -127,7 +128,7 @@ class General(AppConfigurable):
         if self.pdb_file is not None:
             self.application.script('topology = pdb.topology')
             return self.pdb_file.topology
-        raise RuntimeError()
+        raise RuntimeError('only loading from pdbs currently supported')
 
     def get_platform(self):
         "Get the platform"
@@ -157,7 +158,7 @@ class General(AppConfigurable):
         elif platform == 'OpenCL':
             pp = {'OpenCLPrecision': self.precision.lower()}
         else:
-            raise RuntimeError()
+            raise RuntimeError('unknown platform')
 
         self.application.script('platformProperties = %s' % pp)
         return pp
@@ -337,7 +338,7 @@ class Dynamics(AppConfigurable):
                    self.tolerance)
             return VariableLangevinIntegrator(self.tolerance)
         else:
-            raise RuntimeError()
+            raise RuntimeError('unknown integrator')
 
     def get_forces(self):
         "Get additional OpenMM force objects to be added to the system"
