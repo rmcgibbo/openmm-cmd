@@ -68,7 +68,7 @@ class General(AppConfigurable):
 
     def active_config_traits(self):
         values = ['forcefield', 'water', 'platform', 'coords']
-        if self.platform != 'Reference' and self.fastest_plaform in ['CUDA', 'OpenCL']:
+        if self.platform != 'Reference' and self.fastest_platform in ['CUDA', 'OpenCL']:
             values.append('precision')
         return values
 
