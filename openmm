@@ -134,7 +134,7 @@ class General(AppConfigurable):
 
 class System(AppConfigurable):
     """Parameters for the system, including the method for calculating nonbonded
-    forces, constraints, and initialization of velocities"""
+    forces, constraints, and initialization of velocities."""
 
     nb_method = CaselessStrEnum(['NoCutoff', 'CutoffNonPeriodic',
         'CutoffPeriodic', 'Ewald', 'PME'], config=True, default_value='PME',
@@ -189,7 +189,7 @@ class System(AppConfigurable):
                              "is only appropriate when 'rand_vels' is True")
 
 class Dynamics(AppConfigurable):
-    "Parameters for the integrator, thermostats and barostats"
+    "Parameters for the integrator, thermostats and barostats."
 
     integrator = CaselessStrEnum(['Langevin', 'Verlet', 'Brownian',
         'VariableLangevin', 'VariableVerlet'], config=True, allow_none=False,
