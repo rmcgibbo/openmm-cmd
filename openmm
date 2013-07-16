@@ -21,7 +21,7 @@ from ipcfg.progressreporter import ProgressReporter
 from ipcfg.extratraitlets import Quantity
 from ipcfg.openmmapplication import OpenMMApplication, AppConfigurable
 from ipcfg.IPython.traitlets import (CInt, CBool, CBytes, CaselessStrEnum,
-                                     Instance, Enum, CFloat, TraitError)
+                                     Instance, Enum, CFloat, TraitError, List)
 from ipcfg.IPython.loader import AliasError
 from ipcfg.IPython.application import Application
 from ipcfg.IPython.text import wrap_paragraphs
@@ -241,16 +241,24 @@ class Dynamics(AppConfigurable):
     temp = Quantity(300 * unit.kelvin, config=True, help='''Temperature
         of the heat bath, used either by a stochastic integrator or the
         Andersen thermostat to maintain a constant temperature ensemble.''')
-    barostat = CaselessStrEnum(['MonteCarlo', 'None'], allow_none=True,
+    barostat = CaselessStrEnum(['MonteCarlo', 'MonteCarloAnisotropic', 'None'], allow_none=True,
         config=True, default_value='None', help='''Activate a barostat for
         pressure coupling. The MC barostat requires temperature control
         (stochastic integrator or Andersen thermostat) to be in effect
         as well.''')
     pressure = Quantity(1 * unit.atmosphere, config=True, help='''Pressure
         target, used by a barostat.''')
+    pressure3 = List([1, 1, 1], config=True, help='''Pressure
+        target, used by the Monte Carlo anisotropic barostat.''')
+    scalex = CBool(True, config=True, help='''Switch for scaling the x-axis, 
+        used by the Monte Carlo anisotropic barostat.''')
+    scaley = CBool(True, config=True, help='''Switch for scaling the y-axis, 
+        used by the Monte Carlo anisotropic barostat.''')
+    scalez = CBool(True, config=True, help='''Switch for scaling the z-axis, 
+        used by the Monte Carlo anisotropic barostat.''')
     barostat_interval = CInt(25, config=True, help='''The frequency (in time
         steps) at which Monte Carlo pressure changes should be attempted.
-        This option is only invoked when barostat == MonteCarlo.''')
+        This option is only invoked when barostat in [MonteCarlo, MonteCarloAnisotropic].''')
     thermostat = CaselessStrEnum(['Andersen', 'None'], allow_none=True,
         config=True, default_value=None, help='''Activate a thermostat to
         maintain a constant temperature simulation.''')
@@ -271,6 +279,13 @@ class Dynamics(AppConfigurable):
         if self.barostat == 'MonteCarlo':
             active_traits.append('pressure')
             active_traits.append('barostat_interval')
+
+        if self.barostat == 'MonteCarloAnisotropic':
+            active_traits.append('pressure3')
+            active_traits.append('barostat_interval')
+            active_traits.append('scalex')
+            active_traits.append('scaley')
+            active_traits.append('scalez')
 
         if self.integrator in ['Langevin', 'VariableLangevin', 'Brownian'] or self.thermostat == 'Andersen':
             active_traits.append('temp')
@@ -349,6 +364,11 @@ class Dynamics(AppConfigurable):
                   (self.pressure, self.temp, self.barostat_interval))
             forces.append(mm.MonteCarloBarostat(self.pressure, self.temp,
                                                 self.barostat_interval))
+        if self.barostat == 'MonteCarloAnisotropic':
+            self.application.script('system.addForce(mm.MonteCarloAnisotropicBarostat(%s, %s, %s, %s, %s, %s)' %
+                  (self.pressure3, self.temp, self.barostat_interval, self.scalex, self.scaley, self.scalez))
+            forces.append(mm.MonteCarloAnisotropicBarostat(self.pressure3, self.temp,
+                                                           self.barostat_interval, self.scalex, self.scaley, self.scalez))
         if self.thermostat == 'Andersen':
             self.application.script('system.addForce(mm.AndersenThermostat(%s, %s)' %
                   (self.temp, self.collision_rate))
