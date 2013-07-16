@@ -23,12 +23,14 @@ import copy
 
 
 from .IPython import traitlets
-from .IPython.traitlets import Bytes, Instance, List, TraitError, Unicode
+from .IPython.traitlets import Bytes, Instance, List, TraitError, Unicode, CBool, CInt, CBytes, CFloat
 from .IPython.application import Application
 from .IPython.configurable import LoggingConfigurable
 from .IPython.text import indent, dedent, wrap_paragraphs
 from .IPython.loader import ConfigFileNotFound
 from .ini_loader import IniFileConfigLoader
+from .argparse_loader import ArgParseLoader
+
 
 #-----------------------------------------------------------------------------
 # Dirty Hacks
@@ -55,6 +57,12 @@ def _traitlets_add_article(name):
         return _super_traitlets_add_article(object)
 traitlets.add_article = _traitlets_add_article
 
+
+# displaynames
+CBool._displayname = 'Boolean'
+CInt._displayname = 'Integer'
+CBytes._displayname = 'String'
+CFloat._displayname = 'Float' 
 
 #-----------------------------------------------------------------------------
 # Classes
@@ -184,24 +192,30 @@ class OpenMMApplication(Application):
                 file = sys.stderr
             file.write(message)
 
-    def flatten_flags(self):
-        """Hook back into the superclass to enable command line options to be
-        parsed like aliases even when they're not printed out in the alias
-        table.
+    # def parse_command_line(self, argv=None):
+    #     """Parse the command line arguments."""
+    #     argv = sys.argv[1:] if argv is None else argv
+        
+    #     if argv and argv[0] == 'help':
+    #         # turn `ipython help notebook` into `ipython notebook -h`
+    #         argv = argv[1:] + ['-h']
 
-        If there's an option like --ConfigurableClass.option, this little
-        hack makes it possible to specify it using --option.
+    #     if any(x in argv for x in ('-h', '--help-all', '--help')):
+    #         self.print_description()
+    #         self.print_help('--help-all' in argv)
+    #         self.print_examples()
+    #         self.exit(0)
 
-        This method is called in the superclass when parsing the command
-        line options, so we just hijack it to spoof the alias table. Maybe
-        there is better way to do this?
-        """
-        flags, aliases = super(OpenMMApplication, self).flatten_flags()
-        for cls in filter(lambda c: c != self.__class__, self.classes):
-            for name in cls.class_traits(config=True).keys():
-                aliases[name] = '%s.%s' % (cls.__name__, name)
-
-        return flags, aliases
+    #     if '--version' in argv or '-V' in argv:
+    #         self.print_version()
+    #         self.exit(0)
+        
+    #     loader = ArgParseLoader(argv=argv, classes=self.classes, aliases=self.aliases)
+    #     config = loader.load_config()
+    #     self.update_config(config)
+    #     print self.config
+    #     # store unparsed args in extra_args
+    #     self.extra_args = loader.extra_args
 
 
 class AppConfigurable(LoggingConfigurable):
@@ -296,7 +310,12 @@ class AppConfigurable(LoggingConfigurable):
         """
         assert inst is None or isinstance(inst, cls)
         lines = []
-        header = "--%s=<%s>" % (trait.name, trait.__class__.__name__)
+        if hasattr(trait.__class__, '_displayname'):
+            traittype = trait.__class__._displayname
+        else:
+            traittype = trait.__class__.__name__
+
+        header = "--%s <%s>" % (trait.name, traittype)
         lines.append(header)
         if inst is not None:
             lines.append(indent('Current: %r' % getattr(inst, trait.name), 4))

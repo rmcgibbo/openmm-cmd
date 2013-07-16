@@ -274,7 +274,7 @@ class Application(SingletonConfigurable):
             trait = cls.class_traits(config=True)[traitname]
             help = cls.class_get_trait_help(trait).splitlines()
             # reformat first line
-            help[0] = help[0].replace(longname, alias) + ' (%s)'%longname
+            help[0] = help[0].replace(longname, alias) #+ ' (%s)'%longname
             if len(alias) == 1:
                 help[0] = help[0].replace('--%s='%alias, '-%s '%alias)
             lines.extend(help)
@@ -399,50 +399,50 @@ class Application(SingletonConfigurable):
         # and initialize subapp
         self.subapp.initialize(argv)
     
-    def flatten_flags(self):
-        """flatten flags and aliases, so cl-args override as expected.
+    # def flatten_flags(self):
+    #     """flatten flags and aliases, so cl-args override as expected.
         
-        This prevents issues such as an alias pointing to InteractiveShell,
-        but a config file setting the same trait in TerminalInteraciveShell
-        getting inappropriate priority over the command-line arg.
+    #     This prevents issues such as an alias pointing to InteractiveShell,
+    #     but a config file setting the same trait in TerminalInteraciveShell
+    #     getting inappropriate priority over the command-line arg.
 
-        Only aliases with exactly one descendent in the class list
-        will be promoted.
+    #     Only aliases with exactly one descendent in the class list
+    #     will be promoted.
         
-        """
-        # build a tree of classes in our list that inherit from a particular
-        # it will be a dict by parent classname of classes in our list
-        # that are descendents
-        mro_tree = defaultdict(list)
-        for cls in self.classes:
-            clsname = cls.__name__
-            for parent in cls.mro()[1:-3]:
-                # exclude cls itself and Configurable,HasTraits,object
-                mro_tree[parent.__name__].append(clsname)
-        # flatten aliases, which have the form:
-        # { 'alias' : 'Class.trait' }
-        aliases = {}
-        for alias, cls_trait in self.aliases.iteritems():
-            cls,trait = cls_trait.split('.',1)
-            children = mro_tree[cls]
-            if len(children) == 1:
-                # exactly one descendent, promote alias
-                cls = children[0]
-            aliases[alias] = '.'.join([cls,trait])
+    #     """
+    #     # build a tree of classes in our list that inherit from a particular
+    #     # it will be a dict by parent classname of classes in our list
+    #     # that are descendents
+    #     mro_tree = defaultdict(list)
+    #     for cls in self.classes:
+    #         clsname = cls.__name__
+    #         for parent in cls.mro()[1:-3]:
+    #             # exclude cls itself and Configurable,HasTraits,object
+    #             mro_tree[parent.__name__].append(clsname)
+    #     # flatten aliases, which have the form:
+    #     # { 'alias' : 'Class.trait' }
+    #     aliases = {}
+    #     for alias, cls_trait in self.aliases.iteritems():
+    #         cls,trait = cls_trait.split('.',1)
+    #         children = mro_tree[cls]
+    #         if len(children) == 1:
+    #             # exactly one descendent, promote alias
+    #             cls = children[0]
+    #         aliases[alias] = '.'.join([cls,trait])
         
-        # flatten flags, which are of the form:
-        # { 'key' : ({'Cls' : {'trait' : value}}, 'help')}
-        flags = {}
-        for key, (flagdict, help) in self.flags.iteritems():
-            newflag = {}
-            for cls, subdict in flagdict.iteritems():
-                children = mro_tree[cls]
-                # exactly one descendent, promote flag section
-                if len(children) == 1:
-                    cls = children[0]
-                newflag[cls] = subdict
-            flags[key] = (newflag, help)
-        return flags, aliases
+    #     # flatten flags, which are of the form:
+    #     # { 'key' : ({'Cls' : {'trait' : value}}, 'help')}
+    #     flags = {}
+    #     for key, (flagdict, help) in self.flags.iteritems():
+    #         newflag = {}
+    #         for cls, subdict in flagdict.iteritems():
+    #             children = mro_tree[cls]
+    #             # exactly one descendent, promote flag section
+    #             if len(children) == 1:
+    #                 cls = children[0]
+    #             newflag[cls] = subdict
+    #         flags[key] = (newflag, help)
+    #     return flags, aliases 
 
     @catch_config_error
     def parse_command_line(self, argv=None):

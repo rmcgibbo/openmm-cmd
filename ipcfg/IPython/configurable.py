@@ -205,7 +205,12 @@ class Configurable(HasTraits):
         """
         assert inst is None or isinstance(inst, cls)
         lines = []
-        header = "--%s.%s=<%s>" % (cls.__name__, trait.name, trait.__class__.__name__)
+        if hasattr(trait.__class__, '_displayname'):
+            traittype = trait.__class__._displayname
+        else:
+            traittype = trait.__class__.__name__
+
+        header = "--%s.%s <%s>" % (cls.__name__, trait.name, traittype)
         lines.append(header)
         if inst is not None:
             lines.append(indent('Current: %r' % getattr(inst, trait.name), 4))

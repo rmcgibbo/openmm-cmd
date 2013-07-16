@@ -347,7 +347,6 @@ class CommandLineConfigLoader(ConfigLoader):
           allowing `--C.a=foobar` and `--C.a="foobar"` to be equivalent.  *Not*
           equivalent are `--C.a=4` and `--C.a='4'`.
         """
-        rhs = os.path.expanduser(rhs)
         try:
             # Try to see if regular Python syntax will work. This
             # won't handle strings as the quote marks are removed
@@ -635,6 +634,12 @@ class KVArgParseConfigLoader(ArgParseConfigLoader):
                 nargs = '?'
             else:
                 nargs = None
+            
+            if isinstance(value, tuple):
+                value, metadata = value
+                if 'nargs' in metadata:
+                    nargs = metadata['nargs']
+
             if len(key) is 1:
                 paa('-'+key, '--'+key, type=unicode, dest=value, nargs=nargs)
             else:
@@ -664,6 +669,7 @@ class KVArgParseConfigLoader(ArgParseConfigLoader):
                 subcs.append(self.alias_flags[k])
             else:
                 # eval the KV assignment
+                print k, v
                 self._exec_config_str(k, v)
 
         for subc in subcs:

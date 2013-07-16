@@ -21,7 +21,7 @@ from ipcfg.checkpointreporter import CheckpointReporter
 # command line configuration system
 from ipcfg.extratraitlets import Quantity
 from ipcfg.openmmapplication import OpenMMApplication, AppConfigurable
-from ipcfg.IPython.traitlets import (CInt, CBool, CBytes, CaselessStrEnum,
+from ipcfg.IPython.traitlets import (CInt, CBool, CBytes, CaselessStrEnum, List,
                                      Instance, Enum, CFloat, TraitError)
 from ipcfg.IPython.loader import AliasError
 from ipcfg.IPython.application import Application
@@ -36,13 +36,16 @@ class General(AppConfigurable):
     """General options, including the forcefield, platform, and coordinates.
     """
 
-    forcefield = CaselessStrEnum(['amber96', 'amber99sb', 'amber99sb-ildn',
-        'amber99sb-nmr', 'amber03', 'amber10'], allow_none=False, config=True,
-        default_value='amber99sb-ildn', help=''' Forcefield to use for the
-        protein atoms. For details, consult the literature.''')
+    protein = CaselessStrEnum(['amber96', 'amber99sb', 'amber99sb-ildn',
+        'amber99sb-nmr', 'amber03', 'amber10', 'None'], allow_none=None, config=True,
+        default_value='None', help=''' Forcefield to use for the protein atoms.
+        For details, consult the literature.''')
     water = CaselessStrEnum(['SPC/E', 'TIP3P', 'TIP4-Ew', 'TIP5P', 'Implicit'],
         config=True, default_value='TIP3P', allow_none=True, help='''Forcefield
         to use for water in the simulation.''')
+    ffxml = List(config=True, help='''Supply one or more custom forcefield files,
+        in the OpenMM XML format. This can be used to specify a forcefield for
+        ligands, nonstandard amino acids, etc.''', nargs='+')
     platform = CaselessStrEnum(['Reference', 'OpenCL', 'CUDA', 'NotSpecified'],
         default_value='NotSpecified', allow_none=False, help='''OpenMM runs
         simulations on three platforms: Reference, CUDA, and OpenCL. If not
@@ -68,9 +71,12 @@ class General(AppConfigurable):
         return fastest
 
     def active_config_traits(self):
-        values = ['forcefield', 'water', 'platform', 'coords']
+        values = ['protein', 'water', 'platform', 'coords']
         if self.platform != 'Reference' and self.fastest_platform in ['CUDA', 'OpenCL']:
             values.append('precision')
+
+        if len(self.ffxml) > 0:
+            values.append('ffxml')
         return values
 
     def validate(self):
@@ -91,6 +97,9 @@ class General(AppConfigurable):
 
     def get_forcefield(self):
         "Create the forcefield object"
+
+        print self.ffxml
+
         files = [self.forcefield.replace('-', '').lower() + '.xml']
         if self.water in ['SPC/E', 'TIP3P', 'TIP4-Ew', 'TIP5P']:
             files.append(
@@ -624,7 +633,11 @@ class OpenMM(OpenMMApplication):
             col1.append('\n[%s]' % kls.__class__.__name__)
             col2.append('')
             for traitname in kls.active_config_traits():
-                col1.append('%s = %s' % (traitname, getattr(kls, traitname)))
+                trait = getattr(kls, traitname)
+                if isinstance(trait, list):
+                    trait = ' '.join(trait)
+
+                col1.append('%s = %s' % (traitname, trait))
                 if traitname in kls.specified_config_traits:
                     col2.append('# your selection')
                 else:
