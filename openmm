@@ -16,6 +16,7 @@ from simtk import unit
 from simtk.openmm import app
 from simtk import openmm as mm
 from ipcfg.progressreporter import ProgressReporter
+from ipcfg.checkpointreporter import CheckpointReporter
 
 # command line configuration system
 from ipcfg.extratraitlets import Quantity
@@ -362,8 +363,8 @@ class Simulation(AppConfigurable):
     """Parameters for the simulation, including the mode and frequency
     with which files are saved to disk, the number of steps, etc."""
 
-    n_steps = CInt(1000, config=True,
-                  help='''Number of steps of simulation to run.''')
+    n_steps = CInt(1000, config=True, help='''Number of steps of simulation
+        to run.''')
     minimize = CBool(True, config=True, help='''First perform local energy
         minimization, to find a local potential energy minimum near the
         starting structure.''')
@@ -373,6 +374,10 @@ class Simulation(AppConfigurable):
         save the state to disk in the DCD format.''')
     statedata_freq = CInt(1000, config=True, help='''Frequency, in steps,
         to print summary statistics on the state of the simulation.''')
+    #chk_file = CBytes('traj.chk', config=True, help='''Path to a checkpoint file
+    #    to save to''')
+    #chk_freq = CInt(1000, config=True, help='''Frequency, in steps, to save checkpoint
+    #    file.''')
 
     def validate(self):
         self.log.debug('Running simulation options validations.')
@@ -516,6 +521,10 @@ class OpenMM(OpenMMApplication):
             % (self.simulation.statedata_freq, self.simulation.n_steps))
         simulation.reporters.append(ProgressReporter(sys.stdout,
             self.simulation.statedata_freq, self.simulation.n_steps))
+        #self.script('simulation.reporters.append(CheckpointReporter(%s, %s))'
+        #    % (self.simulation.chk_file, self.simulation.chk_freq))
+        #simulation.reporters.append(CheckpointReporter(self.simulation.chk_file,
+        #    self.simulation.chk_freq))
 
         self.script('simulation.step(%s)' % self.simulation.n_steps)
         if self.show_script:
