@@ -7,6 +7,7 @@
 
 import os
 import sys
+import shutil
 import logging
 import platform
 from datetime import datetime
@@ -16,6 +17,8 @@ from simtk import unit
 from simtk.openmm import app
 from simtk import openmm as mm
 from ipcfg.progressreporter import ProgressReporter
+from ipcfg.restartreporter import RestartReporter, read_restart_info
+from ipcfg.velocityverlet import VelocityVerletIntegrator
 
 # command line configuration system
 from ipcfg.extratraitlets import Quantity
@@ -84,6 +87,8 @@ class General(AppConfigurable):
             if self.pdb_file is None:
                 self.application.script("pdb = app.PDBFile('%s')" % self.coords)
                 self.pdb_file = app.PDBFile(self.coords)
+        elif self.coords == '':
+            raise RuntimeError('You must provide a coordinate file, either in the configuration file or on the command line using --coords=protein.pdb')
         else:
             raise NotImplementedError('Currently, only reading from pdb files '
                                       'is implemented')
@@ -228,7 +233,7 @@ class Dynamics(AppConfigurable):
     "Parameters for the integrator, thermostats and barostats."
 
     integrator = CaselessStrEnum(['Langevin', 'Verlet', 'Brownian',
-        'VariableLangevin', 'VariableVerlet'], config=True, allow_none=False,
+        'VariableLangevin', 'VariableVerlet', 'VelocityVerlet'], config=True, allow_none=False,
         default_value='Langevin', help='''OpenMM offers a choice of several
         different integration methods. Refer to the user guide for
         details.''')
@@ -271,7 +276,7 @@ class Dynamics(AppConfigurable):
         simulation.
         """
         active_traits = ['integrator', 'barostat', 'thermostat']
-        if self.integrator in ['Langevin', 'Verlet', 'Brownian']:
+        if self.integrator in ['Langevin', 'Verlet', 'VelocityVerlet', 'Brownian']:
             active_traits.append('dt')
         else:
             active_traits.append('tolerance')
@@ -307,7 +312,7 @@ class Dynamics(AppConfigurable):
             raise TraitError("The variable integrator error threshold option, 'tolerance',"
                              "is only appropriate when using the VariableLangevin or "
                              "VariableVerlet integrators.")
-        if 'dt' in self.specified_config_traits and self.integrator not in ['Langevin', 'Verlet', 'Brownian']:
+        if 'dt' in self.specified_config_traits and self.integrator not in ['Langevin', 'Verlet', 'VelocityVerlet', 'Brownian']:
             raise TraitError("The timestep option, 'dt', is only appropriate when using "
                              "a fixed timestep integrator.")
 
@@ -345,6 +350,9 @@ class Dynamics(AppConfigurable):
         elif self.integrator == 'Verlet':
             self.application.script('integrator = mm.VerletIntegrator(%s)' % self.dt)
             return mm.VerletIntegrator(self.dt)
+        elif self.integrator == 'VelocityVerlet':
+            self.application.script('integrator = VelocityVerletIntegrator(%s)' % self.dt)
+            return VelocityVerletIntegrator(self.dt)
         elif self.integrator == 'VariableVerlet':
             self.application.script('integrator = mm.VariableVerletIntegrator(%s)' %
                    self.tolerance)
@@ -394,10 +402,19 @@ class Simulation(AppConfigurable):
         save the state to disk in the DCD format.''')
     statedata_freq = CInt(1000, config=True, help='''Frequency, in steps,
         to print summary statistics on the state of the simulation.''')
+    restart_file = CBytes('restart.p', config=True, help='''Filename for 
+        reading/writing the restart file, in Python pickle format.''')
+    restart_freq = CInt(1000, config=True, help='''Frequency, in steps, to
+        save the restart file in Python pickle format.''')
+    read_restart = CBool(False, config=True, help='''Switch for whether to
+        read restart information from file.''')
+    write_restart = CBool(True, config=True, help='''Switch for whether to
+        write restart information to file.''')
 
     def validate(self):
         self.log.debug('Running simulation options validations.')
-
+        if self.read_restart and not os.path.isfile(self.restart_file):
+            raise TraitError("The simulation cannot be restarted, because the restart file does not exist.")
 
 class OpenMM(OpenMMApplication):
     short_description = 'OpenMM: GPU Accelerated Molecular Dynamics'
@@ -463,7 +480,7 @@ class OpenMM(OpenMMApplication):
         """
         super(OpenMM, self).validate()
         self.log.debug('Running global options validations.')
-        if self.dynamics.integrator in ['Langevin', 'Verlet']:
+        if self.dynamics.integrator in ['Langevin', 'Verlet', 'VelocityVerlet']:
             if self.system.constraints is None and self.dynamics.dt > 1*unit.femtoseconds:
                 raise TraitError('You are likely using too large a timestep. With the '
                                  'Langevin or Verlet integrators, without constraints a '
@@ -529,21 +546,32 @@ class OpenMM(OpenMMApplication):
         self.script('simulation = app.Simulation(topology, system, integrator, platform, properties)')
         simulation = app.Simulation(topology, system, integrator, platform, properties)
 
-        self.script('simulation.context.setPositions(positions)')
-        simulation.context.setPositions(positions)
+        if self.simulation.read_restart:
+            self.log.info("Restarting simulation by reading from %s." % self.simulation.restart_file)
+            read_restart_info(simulation, self.simulation.restart_file, self.dynamics.integrator, self.dynamics.dt)
+        else:
+            self.script('simulation.context.setPositions(positions)')
+            simulation.context.setPositions(positions)
 
-        if self.simulation.minimize:
-            self.script('simulation.minimizeEnergy()')
-            simulation.minimizeEnergy()
+            if self.simulation.minimize:
+                self.script('simulation.minimizeEnergy()')
+                simulation.minimizeEnergy()
 
-        if self.system.rand_vels:
-            self.script('simulation.context.setVelocitiesToTemperature()')
-            simulation.context.setVelocitiesToTemperature(self.system.gen_temp)
+            if self.system.rand_vels:
+                self.script('simulation.context.setVelocitiesToTemperature()')
+                simulation.context.setVelocitiesToTemperature(self.system.gen_temp)
 
         self.script('simulation.reporters.append(ProgressReporter(sys.stdout, %s, %s))'
             % (self.simulation.statedata_freq, self.simulation.n_steps))
         simulation.reporters.append(ProgressReporter(sys.stdout,
             self.simulation.statedata_freq, self.simulation.n_steps))
+
+        if self.simulation.write_restart:
+            backup_file(self.simulation.restart_file, self.log)
+            self.log.info("Will write restart information every %i steps to %s." % (self.simulation.restart_freq, self.simulation.restart_file))
+            self.script('simulation.reporters.append(RestartReporter(%s, %s, %s))'
+                % (self.simulation.restart_freq, self.simulation.restart_file, self.dynamics.integrator))
+            simulation.reporters.append(RestartReporter(self.simulation.restart_freq, self.simulation.restart_file, self.dynamics.integrator, self.dynamics.dt))
 
         self.script('simulation.step(%s)' % self.simulation.n_steps)
         if self.show_script:
@@ -607,11 +635,7 @@ class OpenMM(OpenMMApplication):
         if self.config_file_out == '':
             return
 
-        while os.path.exists(self.config_file_out):
-            new = increment_outfn(self.config_file_out,
-                                self.__class__.config_file_out.default_value)
-            self.log.warning("%s already exists. I'm trying %s", self.config_file_out, new)
-            self.config_file_out = new
+        backup_file(self.config_file_out, self.log)
 
         # create the config file
         lines = ['# Configuration file for openmm',
@@ -661,16 +685,20 @@ class OpenMM(OpenMMApplication):
 #----------------------------------------------------------------------------
 # Utilities
 #----------------------------------------------------------------------------
-def increment_outfn(fn, default):
-    """Increment the name of an output file"""
-    if fn == default:
-        a, b = os.path.splitext(fn)
-        return a + '.1' + b
 
-    a, c = os.path.splitext(fn)
-    a, b = os.path.splitext(a)
-    b = '.%s' % (int(b[1:]) + 1)
-    return a + b + c
+def backup_file(fnm, logger):
+    # Backs up a file that's about to be overwritten (basename.ext)
+    # by moving it to basename_#.ext where # is the first number that
+    # doesn't already have an existing file.
+    oldfnm = fnm
+    if os.path.exists(oldfnm):
+        base, ext = os.path.splitext(fnm)
+        i = 1
+        while os.path.exists(fnm):
+            fnm = "%s_%i%s" % (base, i, ext)
+            i += 1
+        logger.info("Backing up %s -> %s" % (oldfnm, fnm))
+        shutil.move(oldfnm, fnm)
 
 if __name__ == '__main__':
     OpenMM.launch_instance()
