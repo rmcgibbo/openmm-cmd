@@ -1090,6 +1090,13 @@ class CBool(Bool):
     """A casting version of the boolean trait."""
 
     def validate(self, obj, value):
+        if isinstance(value, basestring):
+            if value.lower() in ['true', 'yes', 'y']:
+                return True
+            elif value.lower() in ['false', 'no', 'n']:
+                return False
+            self.error(obj, value)
+
         try:
             return bool(value)
         except:

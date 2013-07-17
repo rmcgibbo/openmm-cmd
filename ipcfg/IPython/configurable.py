@@ -17,7 +17,7 @@ Authors:
 #-----------------------------------------------------------------------------
 #  Copyright (C) 2008-2011  The IPython Development Team
 #
-#  Distributed under the terms of the BSD License.  The full license is in
+#  Distributed under the terms of the BSD License.  The full liceunse is in
 #  the file COPYING, distributed as part of this software.
 #-----------------------------------------------------------------------------
 
@@ -369,17 +369,3 @@ class SingletonConfigurable(Configurable):
     def initialized(cls):
         """Has an instance been created?"""
         return hasattr(cls, "_instance") and cls._instance is not None
-
-
-class LoggingConfigurable(Configurable):
-    """A parent class for Configurables that log.
-
-    Subclasses have a log trait, and the default behavior
-    is to get the logger from the currently running Application
-    via Application.instance().log.
-    """
-
-    log = Instance('logging.Logger')
-    def _log_default(self):
-        from .application import Application
-        return Application.instance().log

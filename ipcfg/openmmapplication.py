@@ -20,12 +20,11 @@ traits automatically aliased on the command line.
 import os
 import sys
 import copy
-
+import logging
 
 from .IPython import traitlets
-from .IPython.traitlets import Bytes, Instance, List, TraitError, Unicode, CBool, CInt, CBytes, CFloat
-from .IPython.application import Application
-from .IPython.configurable import LoggingConfigurable
+from .IPython.traitlets import Bytes, Instance, List, TraitError, Unicode, CBool, CInt, CBytes, CFloat, Enum, Dict
+from .IPython.configurable import Configurable, SingletonConfigurable
 from .IPython.text import indent, dedent, wrap_paragraphs
 from .IPython.loader import ConfigFileNotFound
 from .ini_loader import IniFileConfigLoader
@@ -62,19 +61,108 @@ traitlets.add_article = _traitlets_add_article
 CBool._displayname = 'Boolean'
 CInt._displayname = 'Integer'
 CBytes._displayname = 'String'
-CFloat._displayname = 'Float' 
+CFloat._displayname = 'Float'
 
 #-----------------------------------------------------------------------------
 # Classes
 #-----------------------------------------------------------------------------
 
-class OpenMMApplication(Application):
+class LevelFormatter(logging.Formatter):
+    """Formatter with additional `highlevel` record
 
+    This field is empty if log level is less than highlevel_limit,
+    otherwise it is formatted with self.highlevel_format.
+
+    Useful for adding 'WARNING' to warning messages,
+    without adding 'INFO' to info, etc.
+    """
+    highlevel_limit = logging.WARN
+    highlevel_format = " %(levelname)s |"
+
+    def format(self, record):
+        if record.levelno >= self.highlevel_limit:
+            record.highlevel = self.highlevel_format % record.__dict__
+        else:
+            record.highlevel = ""
+
+        return super(LevelFormatter, self).format(record)
+
+
+class OpenMMApplication(SingletonConfigurable):
     """Baseclass for the OpenMM application script, with the methods
     for printing the help text and loading the config file (boring stuff)
     """
+    name = Unicode(u'Application')
     configured_classes = List()
     option_description = Unicode('')
+
+    # The log level for the application
+    log_level = Enum((0,10,20,30,40,50,'DEBUG','INFO','WARN','ERROR','CRITICAL'),
+                    default_value=logging.WARN,
+                    config=True,
+                    help="Set the log level by value or name.")
+    def _log_level_changed(self, name, old, new):
+        """Adjust the log level when log_level is set."""
+        if isinstance(new, basestring):
+            new = getattr(logging, new)
+            self.log_level = new
+        self.log.setLevel(new)
+
+    log_datefmt = Unicode("%Y-%m-%d %H:%M:%S", config=True,
+        help="The date format used by logging formatters for %(asctime)s"
+    )
+    def _log_datefmt_changed(self, name, old, new):
+        self._log_format_changed()
+
+    log_format = Unicode("[%(name)s]%(highlevel)s %(message)s", config=True,
+        help="The Logging format template",
+    )
+    def _log_format_changed(self, name, old, new):
+        """Change the log formatter when log_format is set."""
+        _log_handler = self.log.handlers[0]
+        _log_formatter = LevelFormatter(new, datefmt=self.log_datefmt)
+        _log_handler.setFormatter(_log_formatter)
+
+    log = Instance(logging.Logger)
+    def _log_default(self):
+        """Start logging for this application.
+
+        The default is to log to stderr using a StreamHandler, if no default
+        handler already exists.  The log level starts at logging.WARN, but this
+        can be adjusted by setting the ``log_level`` attribute.
+        """
+        log = logging.getLogger(self.__class__.__name__)
+        log.setLevel(self.log_level)
+        log.propagate = False
+        _log = log # copied from Logger.hasHandlers() (new in Python 3.2)
+        while _log:
+            if _log.handlers:
+                return log
+            if not _log.propagate:
+                break
+            else:
+                _log = _log.parent
+        if sys.executable.endswith('pythonw.exe'):
+            # this should really go to a file, but file-logging is only
+            # hooked up in parallel applications
+            _log_handler = logging.StreamHandler(open(os.devnull, 'w'))
+        else:
+            _log_handler = logging.StreamHandler()
+        _log_formatter = LevelFormatter(self.log_format, datefmt=self.log_datefmt)
+        _log_handler.setFormatter(_log_formatter)
+        log.addHandler(_log_handler)
+        return log
+
+    # the alias map for configurables
+    aliases = Dict({'log-level' : 'Application.log_level'})
+
+    def __init__(self, **kwargs):
+        SingletonConfigurable.__init__(self, **kwargs)
+        # Ensure my class is in self.classes, so my attributes appear in command line
+        # options and config files.
+        if self.__class__ not in self.classes:
+            self.classes.insert(0, self.__class__)
+
 
     def initialize(self, argv=None):
         '''Do the first steps to configure the application, including
@@ -93,16 +181,7 @@ class OpenMMApplication(Application):
         error_on_no_config_file = not (any(a == 'make_config' for a in sys.argv) or len(config_flags) == 0)
         self.load_config_file(self.config_file_path, error_on_not_exists=error_on_no_config_file)
 
-        super(OpenMMApplication, self).initialize(argv)
-
-        # make sure that each of the groups in the config were actually used
-        # for example, if the user typed `$ openmm --Generalll.precision=1` we
-        # want to let them know that `Generalll` is not a valid class
-        classnames = set([c.__name__ for c in self.classes])
-        for c in self.config.keys():
-            if c not in classnames:
-                self.error("Bad config encountered during initialization. "
-                           "'%s' is not a configurable class or option." % c)
+        self.parse_command_line(argv)
 
     def initialize_configured_classes(self):
         for klass in filter(lambda c: c != self.__class__, self.classes):
@@ -142,7 +221,6 @@ class OpenMMApplication(Application):
             self.log.debug("Loaded config file: %s", loader.full_filename)
             self.update_config(config)
 
-
     def print_description(self):
         "Print the application description"
         lines = []
@@ -155,12 +233,21 @@ class OpenMMApplication(Application):
             lines.append('')
         print os.linesep.join(lines)
 
+    def print_options(self):
+        if not self.aliases:
+            return
+        lines = ['Options']
+        lines.append('-'*len(lines[0]))
+        lines.append('')
+        self.print_alias_help()
+        print
+
     def print_help(self, classes=False):
         """Print the help for each Configurable class in self.classes.
 
         If classes=False (the default), only flags and aliases are printed.
         """
-        self.print_subcommands()
+        #self.print_subcommands()
         self.print_options()
 
         if classes:
@@ -174,6 +261,33 @@ class OpenMMApplication(Application):
             print "To see all available configurables, use `--help-all`"
             print
 
+    def print_alias_help(self):
+        """Print the alias part of the help."""
+        if not self.aliases:
+            return
+
+        lines = []
+        classdict = {self.__class__.__name__: self.__class__}
+        for cls in self.classes:
+            # include all parents (up to, but excluding Configurable) in available names
+            for c in cls.mro()[:-3]:
+                classdict[c.__name__] = c
+
+        for alias, longname in self.aliases.iteritems():
+            classname, traitname = longname.split('.',1)
+            cls = classdict[classname]
+
+            trait = cls.class_traits(config=True)[traitname]
+            help = cls.class_get_trait_help(trait).splitlines()
+            # reformat first line
+            help[0] = help[0].replace(longname, alias) #+ ' (%s)'%longname
+            if len(alias) == 1:
+                help[0] = help[0].replace('--%s='%alias, '-%s '%alias)
+            lines.extend(help)
+        # lines.append('')
+        print os.linesep.join(lines)
+
+
     def error(self, message=None, header=False):
         "Error out with a message"
         if header:
@@ -186,39 +300,41 @@ class OpenMMApplication(Application):
                 '\nTo see all available configurables, use `--help-all`\n', sys.stderr)
         sys.exit(2)
 
+    def exit(self, exit_status=0):
+         self.log.debug("Exiting application: %s" % self.name)
+         sys.exit(exit_status)
+
     def _print_message(self, message, file=None):
         if message:
             if file is None:
                 file = sys.stderr
             file.write(message)
 
-    # def parse_command_line(self, argv=None):
-    #     """Parse the command line arguments."""
-    #     argv = sys.argv[1:] if argv is None else argv
-        
-    #     if argv and argv[0] == 'help':
-    #         # turn `ipython help notebook` into `ipython notebook -h`
-    #         argv = argv[1:] + ['-h']
+    def parse_command_line(self, argv=None):
+        """Parse the command line arguments."""
+        argv = sys.argv[1:] if argv is None else argv
 
-    #     if any(x in argv for x in ('-h', '--help-all', '--help')):
-    #         self.print_description()
-    #         self.print_help('--help-all' in argv)
-    #         self.print_examples()
-    #         self.exit(0)
+        if argv and argv[0] == 'help':
+            # turn `ipython help notebook` into `ipython notebook -h`
+            argv = argv[1:] + ['-h']
 
-    #     if '--version' in argv or '-V' in argv:
-    #         self.print_version()
-    #         self.exit(0)
-        
-    #     loader = ArgParseLoader(argv=argv, classes=self.classes, aliases=self.aliases)
-    #     config = loader.load_config()
-    #     self.update_config(config)
-    #     print self.config
-    #     # store unparsed args in extra_args
-    #     self.extra_args = loader.extra_args
+        if any(x in argv for x in ('-h', '--help-all', '--help')):
+            self.print_description()
+            self.print_help('--help-all' in argv)
+            self.exit(0)
+
+        if '--version' in argv or '-V' in argv:
+            self.print_version()
+            self.exit(0)
+
+        loader = ArgParseLoader(argv=argv, classes=self.classes, aliases=self.aliases)
+        config = loader.load_config()
+        self.update_config(config)
+        # store unparsed args in extra_args
+        self.extra_args = loader.extra_args
 
 
-class AppConfigurable(LoggingConfigurable):
+class AppConfigurable(Configurable):
 
     """Subclass of Configurable that ensure's there arn't any extraneous
     values being set during configuration.
@@ -227,11 +343,14 @@ class AppConfigurable(LoggingConfigurable):
     that you can use to check that things get set correctly.
 
        """
-    application = Instance('ipcfg.IPython.application.Application')
+    application = Instance('ipcfg.openmmapplication.OpenMMApplication')
+
+    log = Instance('logging.Logger')
+    def _log_default(self):
+        return self.application.log
 
     def _application_default(self):
-        from .IPython.application import Application
-        return Application.instance()
+        return OpenMMApplication.instance()
 
     specified_config_traits = List(help='''List of the names of the traits on this
         Configurable that were set during initialization and did not just
@@ -240,7 +359,6 @@ class AppConfigurable(LoggingConfigurable):
 
     def active_config_traits(self):
         return self.class_traits(config=True).keys()
-
 
     def __init__(self, config={}):
         for key in config[self.__class__.__name__].keys():

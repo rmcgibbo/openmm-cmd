@@ -21,10 +21,9 @@ from ipcfg.checkpointreporter import CheckpointReporter
 # command line configuration system
 from ipcfg.extratraitlets import Quantity
 from ipcfg.openmmapplication import OpenMMApplication, AppConfigurable
-from ipcfg.IPython.traitlets import (CInt, CBool, CBytes, CaselessStrEnum, List,
+from ipcfg.IPython.traitlets import (CInt, CBool, CBytes, CaselessStrEnum, List, Bool,
                                      Instance, Enum, CFloat, TraitError)
 from ipcfg.IPython.loader import AliasError
-from ipcfg.IPython.application import Application
 from ipcfg.IPython.text import wrap_paragraphs
 
 #-----------------------------------------------------------------------------
@@ -40,8 +39,8 @@ class General(AppConfigurable):
         'amber99sb-nmr', 'amber03', 'amber10', 'None'], allow_none=None, config=True,
         default_value='None', help=''' Forcefield to use for the protein atoms.
         For details, consult the literature.''')
-    water = CaselessStrEnum(['SPC/E', 'TIP3P', 'TIP4-Ew', 'TIP5P', 'Implicit'],
-        config=True, default_value='TIP3P', allow_none=True, help='''Forcefield
+    water = CaselessStrEnum(['SPC/E', 'TIP3P', 'TIP4-Ew', 'TIP5P', 'Implicit', 'None'],
+        config=True, default_value='None', allow_none=True, help='''Forcefield
         to use for water in the simulation.''')
     ffxml = List(config=True, help='''Supply one or more custom forcefield files,
         in the OpenMM XML format. This can be used to specify a forcefield for
@@ -97,26 +96,28 @@ class General(AppConfigurable):
 
     def get_forcefield(self):
         "Create the forcefield object"
+        files = []
+        if self.protein != 'None':
+            files.append(self.protein.replace('-', '').lower() + '.xml')
 
-        print self.ffxml
-
-        files = [self.forcefield.replace('-', '').lower() + '.xml']
         if self.water in ['SPC/E', 'TIP3P', 'TIP4-Ew', 'TIP5P']:
             files.append(
                 self.water.replace('/', '').replace('-', '').lower() + '.xml')
         elif self.water == 'Implicit':
-            if self.forcefield == 'amber96':
+            if self.protein == 'amber96':
                 files.append('amber96_obc.xml')
-            elif self.forcefield.startswith('amber99'):
+            elif self.protein.startswith('amber99'):
                 files.append('amber99_obc.xml')
-            elif self.forcefield == 'amber03':
+            elif self.protein == 'amber03':
                 files.append('amber03_obc.xml')
-            elif self.forcefield == 'amber10':
+            elif self.protein == 'amber10':
                 files.append('amber10_obc.xml')
             else:
-                raise RuntimeError('unkown protein model')
+                self.error("Without specifying the protein forcefield, I can't"
+                           "unambiguously pick the GBSA implicit solvent parameters.")
         else:
-            raise RuntimeError('unknown water model')
+            self.log.warning("No builtin water forcefield is being used. If you'd "
+                             "like to specify a water forcefield, use --water.")
 
         self.application.script('forcefield = app.ForceField(%s)' %
                ', '.join(["'%s'" % f for f in files]))
@@ -387,6 +388,9 @@ class Simulation(AppConfigurable):
     #    to save to''')
     #chk_freq = CInt(1000, config=True, help='''Frequency, in steps, to save checkpoint
     #    file.''')
+
+    def __init__(self, config):
+        super(Simulation, self).__init__(config=config)
 
     def validate(self):
         self.log.debug('Running simulation options validations.')
@@ -667,4 +671,6 @@ def increment_outfn(fn, default):
     return a + b + c
 
 if __name__ == '__main__':
-    OpenMM.launch_instance()
+    openmm = OpenMM.instance()
+    openmm.initialize()
+    openmm.start()

@@ -1,4 +1,5 @@
-from IPython.loader import Config, AliasError
+from .IPython.loader import Config, AliasError
+from .IPython.traitlets import Bool
 from argparse import ArgumentParser, ArgumentError
 
 class ArgParseLoader(object):
@@ -16,9 +17,8 @@ class ArgParseLoader(object):
         for cls in classes:
             for name in cls.class_traits(config=True):
                 dest = cls.__name__ + '.' + name
-                metadata = getattr(cls, name)._metadata
-                nargs = metadata.get('nargs', None)
-
+                trait = getattr(cls, name)
+                nargs = trait._metadata.get('nargs', None)
                 add_argument('--' + name, type=str, dest=dest, nargs=nargs)
 
         for k, v in aliases.iteritems():
@@ -38,8 +38,10 @@ class ArgParseLoader(object):
     def load_config(self):
         for k, v in self.known_args.__dict__.iteritems():
             if v is not None:
-                if not isinstance(v, list):
+                if isinstance(v, basestring):
                     v = '"%s"' % v
+                elif isinstance(v, list):
+                    pass
                 exec 'self.config.%s = %s' % (k, v)
 
         return self.config
