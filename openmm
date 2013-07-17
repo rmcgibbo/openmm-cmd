@@ -412,7 +412,7 @@ class Simulation(AppConfigurable):
     """Parameters for the simulation, including the mode and frequency
     with which files are saved to disk, the number of steps, etc."""
 
-    n_steps = CInt(1000, config=True, help='''Number of steps of simulation
+    n_steps = CInt(10000, config=True, help='''Number of steps of simulation
         to run.''')
     minimize = CBool(True, config=True, help='''First perform local energy
         minimization, to find a local potential energy minimum near the
@@ -425,7 +425,7 @@ class Simulation(AppConfigurable):
         to print summary statistics on the state of the simulation.''')
     restart_file = CBytes('restart.p', config=True, help='''Filename for 
         reading/writing the restart file, in Python pickle format.''')
-    restart_freq = CInt(1000, config=True, help='''Frequency, in steps, to
+    restart_freq = CInt(5000, config=True, help='''Frequency, in steps, to
         save the restart file in Python pickle format.''')
     read_restart = CBool(False, config=True, help='''Switch for whether to
         read restart information from file.''')
@@ -537,11 +537,12 @@ class OpenMM(OpenMMApplication):
             raise TraitError("The AMOEBA force field is only implemented on the Reference or CUDA platforms.")
 
     def start(self):
+        self.print_config()
+
         topology = self.general.get_topology()
         positions = self.general.get_positions()
         forcefield = self.general.get_forcefield()
 
-        self.print_config()
         self.generate_config_file()
 
         self.script('system = forcefield.createSystem(topology, nonbondedMethod=%s, '
@@ -583,15 +584,21 @@ class OpenMM(OpenMMApplication):
                 simulation.context.setVelocitiesToTemperature(self.system.gen_temp)
 
         self.script('simulation.reporters.append(ProgressReporter(sys.stdout, %s, %s))'
-            % (self.simulation.statedata_freq, self.simulation.n_steps))
+                    % (self.simulation.statedata_freq, self.simulation.n_steps))
         simulation.reporters.append(ProgressReporter(sys.stdout,
             self.simulation.statedata_freq, self.simulation.n_steps))
+
+        backup_file(self.simulation.traj_file, self.log)
+        self.script('simulation.reporters.append(DCDReporter(%s, %s))'
+                    % (self.simulation.traj_file, self.simulation.traj_freq))
+        simulation.reporters.append(app.DCDReporter(self.simulation.traj_file,
+            self.simulation.traj_freq))
 
         if self.simulation.write_restart:
             backup_file(self.simulation.restart_file, self.log)
             self.log.info("Will write restart information every %i steps to %s."
                           % (self.simulation.restart_freq, self.simulation.restart_file))
-            self.script('simulation.reporters.append(RestartReporter(%s, %s, %s))'
+            self.script('simulation.reporters.append(RestartReporter(%s, %s, "%s"))'
                         % (self.simulation.restart_freq, self.simulation.restart_file, self.dynamics.integrator))
             simulation.reporters.append(RestartReporter(self.simulation.restart_freq, self.simulation.restart_file,
                                                         self.dynamics.integrator, self.dynamics.dt))

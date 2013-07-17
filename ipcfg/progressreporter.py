@@ -70,12 +70,12 @@ class ProgressReporter(StateDataReporter):
 
         if self._volume:
             headers.append(('Vol', '(nm^3)'))
-            formats.append('%8.2f')
-            widths.append(8)
+            formats.append('%10.4f')
+            widths.append(10)
         if self._density:
             headers.append(('Rho', '(g/mL)'))
-            formats.append('%8.2f')
-            widths.append(8)
+            formats.append('%10.4f')
+            widths.append(10)
             
         self._formats = formats
         
