@@ -102,7 +102,7 @@ class General(AppConfigurable):
 
     def get_forcefield(self):
         "Create the forcefield object"
-        files = self.ffxml
+        files = [e for e in self.ffxml]  # copy
         if self.protein != 'None':
             files.append(self.protein.replace('-', '').lower() + '.xml')
         else:

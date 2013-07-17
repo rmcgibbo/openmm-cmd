@@ -1,11 +1,6 @@
 OpenMM on the Command Line
 ==========================
 
-OpenMM command line app config file framework / parser based on IPython traitlets
-system. Every configurable option can be specified in an input config file or
-directly on the command line. Command line options override config file
-supplied options.
-
 Features
 --------
 
@@ -58,7 +53,11 @@ Features
   when using the Monte Carlo barostat.
   ```
 
-4. Config File
+4. New Reporters
+   
+  Saving a restart file. Reporting simulation progress.
+ 
+5. Config File
   
   After running a simulation, all of the configuration options you specified --
   either in your input config file or on the command line -- are printed to
