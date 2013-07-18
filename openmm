@@ -473,13 +473,13 @@ class OpenMM(OpenMMApplication):
         used to run this simulation using the OpenMM python API. This is useful
         for learning the API, and as a starting point for producing more complex
         OpenMM applications for making further customizations.""")
-    is_amoeba_system = False
     def _show_script_default(self):
         if self.log_level in [30, 40, 'ERROR', 'CRITICAL']:
             return False
         return True
     def _log_level_default(self):
         return logging.INFO
+    is_amoeba_system = CBool(False)
     def _is_amoeba_system_default(self):
         # Determine whether this is an AMOEBA system.
         return any(['Amoeba' in f.__class__.__name__ for f in self.system.getForces()])
@@ -544,9 +544,10 @@ class OpenMM(OpenMMApplication):
                              "since %s implies you're using a nonperiodic system. But adjusting "
                              "the box volume (the way that the barostat controls the pressure) "
                              "will have no effect." % self.system.nb_method)
-        if self.is_amoeba_system and (self.general.platform not in ['Reference', 'CUDA']):
-            # Should I use TraitError or NotImplementedError?
-            raise TraitError("The AMOEBA force field is only implemented on the Reference or CUDA platforms.")
+        if self.is_amoeba_system and (self.general.platform not in ['Reference', 'CUDA'] or
+            (self.general.platform == 'NotSpecified' and self.general.fastest_platform not in ['Reference', 'CUDA'])):
+                # Should I use TraitError or NotImplementedError?
+                raise TraitError("The AMOEBA force field is only implemented on the Reference or CUDA platforms.")
 
     def start(self):
         self.print_config()
