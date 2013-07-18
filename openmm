@@ -439,7 +439,19 @@ class Simulation(AppConfigurable):
 
 class OpenMM(OpenMMApplication):
     short_description = 'OpenMM: GPU Accelerated Molecular Dynamics'
-    long_description = '''Run a molecular simulaton using the OpenMM toolkit.'''
+    long_description = '''Run a molecular simulaton using the OpenMM toolkit.
+
+    All options can be either specified in the configuration file or on the
+    command line. Command line options override those specified in a config
+    file.
+
+    Note: If you have issues specifying units on the command like, like
+    `openmm --dt 2*fs` causing a "no matches found" error beacuase your shell
+    is trying to interpret the '*' as a wildcard, you can put the expression
+    in single quotes (`openmm --dt '2*fs'`) or change the shell's nomatch behavior.
+    This can be done with `setopt nonomatch` (zsh), `set nonomatch` (tcsh), or
+    `shopt -u nullglob` (bash, but this behavior is already the default in bash).
+    '''
 
     # Configured Classes. During initialization, these guys are
     # instantiated based on the config file / command line when
