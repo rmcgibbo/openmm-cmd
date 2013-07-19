@@ -119,7 +119,7 @@ class ProgressReporter(StateDataReporter):
 
         if days > 0:
             s = "%d:%d:%02d:%02d" % (days, hrs, mins, secs)
-        if hrs > 0:
+        elif hrs > 0:
             s = "%d:%02d:%02d" % (hrs, mins, secs)
         elif mins > 0:
             s = "%d:%02d" % (mins, secs)
