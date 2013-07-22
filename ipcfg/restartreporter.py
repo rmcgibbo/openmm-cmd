@@ -81,7 +81,7 @@ def computeShiftedVelocities(context, state, velocities, timeShift, leaveShifted
     # Apply constraints to them by round-tripping them through the context
     context.setVelocities(shiftedVelocities)
     context.applyVelocityConstraints(1.0e-4)
-    shiftedVelocities = context.getVelocities()
+    shiftedVelocities = context.getState(getVelocities=True).getVelocities()
     if not leaveShiftedVelocitiesInContext:
         context.setVelocities(velocities)
 
@@ -156,7 +156,7 @@ class RestartReporter(object):
         positions = state.getPositions().value_in_unit(nanometer)
         boxVectors = state.getPeriodicBoxVectors().value_in_unit(nanometer)
 
-        timeStep = 0.5 * int(self._isLeapFrog) * simulation.getIntegrator().getStepSize()
+        timeStep = 0.5 * int(self._isLeapFrog) * simulation.context.getIntegrator().getStepSize()
         velocities = state.getVelocities().value_in_unit(nanometer / picosecond)
         velocities = computeShiftedVelocities(simulation.context, state,
                         state.getVelocities(), timeStep).value_in_unit(nanometer / picosecond)
@@ -175,16 +175,18 @@ class RestartReporter(object):
 
         try:
             with open(self._fileName, 'wb') as f:
-                pickle.dump({'version': RESTART_FORMAT_VERSION,
-                             'positions': positions,
-                             'boxVectors': boxVectors,
-                             'velocities': velocities,
-                             'time': time,
-                             'step': step,
-                             'parameters': parameters}, f, pickle.HIGHEST_PROTOCOL)
+                data = {'version': RESTART_FORMAT_VERSION,
+                        'positions': positions,
+                        'boxVectors': boxVectors,
+                        'velocities': velocities,
+                        'time': time,
+                        'step': step,
+                        'parameters': parameters}
+                pickle.dump(data, f, pickle.HIGHEST_PROTOCOL)
         except:
             if backup is not None:
                 shutil.copy(backup, self._fileName)
+            raise
         finally:
             if backup is not None:
                 os.unlink(backup)
@@ -212,7 +214,7 @@ def loadRestartFile(simulation, fileName, isLeapFrog=NotSpecified):
     if 'version' not in data or data['version'] != RESTART_FORMAT_VERSION:
         raise ValueError("I don't know how to read this restart file.")
 
-    numParticles = simulation.getSystem().getNumParticles()
+    numParticles = simulation.context.getSystem().getNumParticles()
     fields = ['positions', 'boxVectors', 'velocities', 'time', 'step', 'parameters']
     for field in fields:
         if field not in data:
@@ -232,8 +234,8 @@ def loadRestartFile(simulation, fileName, isLeapFrog=NotSpecified):
 
     # set velocities
     if isLeapFrog == NotSpecified:
-        isLeapFrog = isLeapFrogIntegrator(simulation.getIntegrator())
-    timeShift = -0.5 * int(isLeapFrog) * simulation.getIntegrator().getStepSize()
+        isLeapFrog = isLeapFrogIntegrator(simulation.context.getIntegrator())
+    timeShift = -0.5 * int(isLeapFrog) * simulation.context.getIntegrator().getStepSize()
 
     numVelocities = len(data['velocities'])
     if numVelocities != numParticles:

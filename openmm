@@ -135,7 +135,7 @@ class General(AppConfigurable):
                                    'custom OpenMM XML forcefield files with the "ffxml" option')
 
         self.application.script('forcefield = app.ForceField(%s)' %
-               ', '.join(["'%s'" % f for f in files]))        
+               ', '.join(["'%s'" % f for f in files]))
         return app.ForceField(*files)
 
     def get_positions(self):
@@ -227,13 +227,13 @@ class System(AppConfigurable):
         active_traits = ['nb_method', 'constraints', 'rigid_water', 'rand_vels']
         if self.nb_method in ['PME', 'Ewald']:
             active_traits.append('ewald_tol')
-            
+
         if self.nb_method != 'NoCutoff':
             active_traits.append('cutoff')
 
         if self.rand_vels:
             active_traits.append('gen_temp')
-        
+
         return active_traits
 
     def validate(self):
@@ -277,11 +277,11 @@ class Dynamics(AppConfigurable):
         target, used by a barostat.''')
     pressure3 = List([1, 1, 1], config=True, help='''Pressure
         target, used by the Monte Carlo anisotropic barostat.''')
-    scalex = CBool(True, config=True, help='''Switch for scaling the x-axis, 
+    scalex = CBool(True, config=True, help='''Switch for scaling the x-axis,
         used by the Monte Carlo anisotropic barostat.''')
-    scaley = CBool(True, config=True, help='''Switch for scaling the y-axis, 
+    scaley = CBool(True, config=True, help='''Switch for scaling the y-axis,
         used by the Monte Carlo anisotropic barostat.''')
-    scalez = CBool(True, config=True, help='''Switch for scaling the z-axis, 
+    scalez = CBool(True, config=True, help='''Switch for scaling the z-axis,
         used by the Monte Carlo anisotropic barostat.''')
     barostat_interval = CInt(25, config=True, help='''The frequency (in time
         steps) at which Monte Carlo pressure changes should be attempted.
@@ -422,9 +422,9 @@ class Simulation(AppConfigurable):
         resulting trajectory to, in DCD format.''')
     traj_freq = CInt(1000, config=True, help='''Frequency, in steps, to
         save the state to disk in the DCD format.''')
-    statedata_freq = CInt(1000, config=True, help='''Frequency, in steps,
+    progress_freq = CInt(1000, config=True, help='''Frequency, in steps,
         to print summary statistics on the state of the simulation.''')
-    restart_file = CBytes('restart.p', config=True, help='''Filename for 
+    restart_file = CBytes('restart.p', config=True, help='''Filename for
         reading/writing the restart file, in Python pickle format.''')
     restart_freq = CInt(5000, config=True, help='''Frequency, in steps, to
         save the restart file in Python pickle format.''')
@@ -602,24 +602,26 @@ class OpenMM(OpenMMApplication):
                 self.script('simulation.context.setVelocitiesToTemperature()')
                 simulation.context.setVelocitiesToTemperature(self.system.gen_temp)
 
-        self.script('simulation.reporters.append(ProgressReporter(sys.stdout, %s, %s))'
-                    % (self.simulation.statedata_freq, self.simulation.n_steps))
-        simulation.reporters.append(ProgressReporter(sys.stdout,
-            self.simulation.statedata_freq, self.simulation.n_steps))
+        if self.simulation.progress_freq > 0:
+            self.script('simulation.reporters.append(ProgressReporter(sys.stdout, %s, %s))'
+                        % (self.simulation.progress_freq, self.simulation.n_steps))
+            simulation.reporters.append(ProgressReporter(sys.stdout,
+                self.simulation.progress_freq, self.simulation.n_steps))
 
-        backup_file(self.simulation.traj_file, self.log)
-        self.script('simulation.reporters.append(DCDReporter(%s, %s))'
-                    % (self.simulation.traj_file, self.simulation.traj_freq))
-        simulation.reporters.append(app.DCDReporter(self.simulation.traj_file,
-            self.simulation.traj_freq))
+        if self.simulation.traj_freq > 0:
+            backup_file(self.simulation.traj_file, self.log)
+            self.script('simulation.reporters.append(DCDReporter(%s, %s))'
+                        % (self.simulation.traj_file, self.simulation.traj_freq))
+            simulation.reporters.append(app.DCDReporter(self.simulation.traj_file,
+                self.simulation.traj_freq))
 
-        if self.simulation.write_restart:
+        if self.simulation.write_restart and self.simulation.restart_freq > 0:
             backup_file(self.simulation.restart_file, self.log)
             self.log.info("Will write restart information every %i steps to %s."
                           % (self.simulation.restart_freq, self.simulation.restart_file))
-            self.script('simulation.reporters.append(RestartReporter(%s, %s, "%s"))'
-                        % (self.simulation.restart_freq, self.simulation.restart_file, self.dynamics.integrator))
-            simulation.reporters.append(RestartReporter(self.simulation.restart_freq, self.simulation.restart_file))
+            self.script('simulation.reporters.append(RestartReporter(%s, %s))'
+                        % (self.simulation.restart_file, self.simulation.restart_freq))
+            simulation.reporters.append(RestartReporter(self.simulation.restart_file, self.simulation.restart_freq))
 
         self.script('simulation.step(%s)' % self.simulation.n_steps)
         if self.show_script:
@@ -631,20 +633,11 @@ class OpenMM(OpenMMApplication):
             self.log.info('%s = %s', key, platform.getPropertyValue(simulation.context, key))
         print ''
 
-        self.force_reporters(simulation, topology)
+        force_reporters(simulation)
         simulation.step(self.simulation.n_steps)
 
-    def force_reporters(self, simulation, topology):
-        """Force all of the reporters on the simulation to run."""
-        gets = [False, False, False, False]
-        for reporter in simulation.reporters:
-            gets = [(a or b) for a, b in zip(gets, reporter.describeNextReport(simulation)[1:])]
-
-        args = gets + [True, (topology.getUnitCellDimensions() is not None)]
-        state = simulation.context.getState(*args)
-
-        for reporter in simulation.reporters:
-            reporter.report(simulation, state)
+        # before exiting, write a restart file
+        force_reporters(simulation, RestartReporter)
 
     def script(self, msg):
         if not self.show_script:
@@ -751,6 +744,38 @@ def backup_file(fnm, logger):
             i += 1
         logger.info("Backing up %s -> %s" % (oldfnm, fnm))
         shutil.move(oldfnm, fnm)
+
+
+def force_reporters(simulation, reporter_class=None):
+    """Force one all of the reporters on the simulation to run.
+
+    Parameters
+    ----------
+    simulation : Simulation
+        The simulation to which the reporters are attached
+    reporter_class : Reporter or None
+        If supplied, only reporters that are instances of reporter_class will
+        be triggered.
+    """
+    gets = [False, False, False, False]
+
+    if reporter_class is None:
+        reporters = simulation.reporters
+    else:
+        reporters = [r for r in simulation.reporters if isinstance(r, reporter_class)]
+
+    if len(reporters) == 0:
+        return
+
+    for reporter in reporters:
+        gets = [(a or b) for a, b in zip(gets, reporter.describeNextReport(simulation)[1:])]
+
+    args = gets + [True, (simulation.topology.getUnitCellDimensions() is not None)]
+    state = simulation.context.getState(*args)
+
+    for reporter in reporters:
+        reporter.report(simulation, state)
+
 
 if __name__ == '__main__':
     openmm = OpenMM.instance()
