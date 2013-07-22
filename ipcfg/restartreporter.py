@@ -2,88 +2,254 @@
 # Imports
 #-----------------------------------------------------------------------------
 # stdlib
-import pickle
 import os
+import tempfile
+import shutil
+import cPickle as pickle
 
 # openmm
-from simtk.unit import nanometer, picosecond, femtosecond, dalton, mole, kilojoule
+import simtk.openmm as mm
+from simtk.unit import (nanometer, picosecond, dalton, Quantity,
+                        kilojoules_per_mole)
+
 
 #-----------------------------------------------------------------------------
-# Classes
+# Globals
+#-----------------------------------------------------------------------------
+
+__all__ = ['RestartReporter', 'loadRestartFile']
+
+class NotSpecified(object):
+    def __str__(self):
+        return 'NotSpecified'
+NotSpecified = NotSpecified()
+
+RESTART_FORMAT_VERSION = 2.0
+
+#-----------------------------------------------------------------------------
+# Utilities
+#-----------------------------------------------------------------------------
+
+def isLeapFrogIntegrator(integrator):
+    if isinstance(integrator, mm.VerletIntegrator):
+        return True
+    if isinstance(integrator, mm.VariableVerletIntegrator):
+        return True
+    if isinstance(integrator, mm.LangevinIntegrator):
+        return True
+    if isinstance(integrator, mm.VariableLangevinIntegrator):
+        return True
+    if hasattr(mm, 'DrudeLangevinIntegrator') and isinstance(integrator, mm.DrudeLangevinIntegrator):
+        return True
+
+    return False
+
+
+def computeShiftedVelocities(context, state, velocities, timeShift, leaveShiftedVelocitiesInContext=False):
+    """Shift velocities forward or backward in time. This method can be used
+    to line up the velocities with the positions for leapfrog-style integrators.
+
+    Parameters
+    - context (Context)
+    - state (State)
+    - velocities (list of Vec3)
+    - timeShift (float)
+    - leaveShiftedVelocitiesInContext (bool)
+    Returns: shifted velocities
+    """
+    if timeShift == 0:
+        return velocities
+
+    system = context.getSystem()
+    numParticles = system.getNumParticles()
+    particleMasses = [system.getParticleMass(i).value_in_unit(dalton) for i in range(numParticles)]
+
+    # Compute the shifted velocities
+    if isinstance(velocities, Quantity):
+        velocities = velocities.value_in_unit(nanometer / picosecond)
+    if isinstance(timeShift, Quantity):
+        timeShift = timeShift.value_in_unit(picosecond)
+
+    forces = state.getForces().value_in_unit(kilojoules_per_mole/nanometer)
+    shiftedVelocities = [None for i in range(numParticles)]
+    for i in range(numParticles):
+        if particleMasses[i] > 0:
+            shiftedVelocities[i] = velocities[i] + forces[i] * (timeShift / particleMasses[i])
+
+    # Apply constraints to them by round-tripping them through the context
+    context.setVelocities(shiftedVelocities)
+    context.applyVelocityConstraints(1.0e-4)
+    shiftedVelocities = context.getVelocities()
+    if not leaveShiftedVelocitiesInContext:
+        context.setVelocities(velocities)
+
+    return shiftedVelocities
+
+#-----------------------------------------------------------------------------
+# Classes and Function
 #-----------------------------------------------------------------------------
 
 class RestartReporter(object):
-    def __init__(self, reportInterval, restart_filename, integrator_name, timestep):
+    """RestartReporter periodically writes restart files containg positions,
+    velocities, box vectors, and other information necessary to restart a
+    simulation.
+
+    Because information like the state of OpenMM's internal random number
+    generators is not saved, the trajectory produced by a restarted
+    simulation should not be expected to be identical to one that would have
+    been produced without the restart.
+
+    To use it, create a RestartReporter, then add it to the Simulation's
+    list of reporters.
+    """
+
+    def __init__(self, fileName, reportInterval, isLeapFrog=NotSpecified):
+        """Create a RestartReporter.
+
+         Parameters:
+         - fileName (string) The file to write to, specified as a file name.
+         - reportInterval (int) The interval (in time steps) at which to write restart files
+         - isLeapFrog (bool) Flag indicating whether the simulation uses a leapfrog
+           style integrator, in which the velocities are offset from the positions
+           by 1/2 a timestep. If so, the velocities will be advanced to match
+           up with the positions before writing the restart file. If not specified,
+           the reporter will inspect the integrator and attempt to make that
+           determination on its own.
+        """
         self._reportInterval = reportInterval
-        self._restart_filename = restart_filename
-        self._integrator_name = integrator_name
-        self._timestep = timestep
+        self._fileName = fileName
+        self._isLeapFrog = isLeapFrog
+        self._isInitialized = False
+
+    def _initialize(self, simulation):
+        """Delayed initialization that can only take place once we
+        have access to the simulation object that the reporter is bound to
+        """
+        if self._isLeapFrog == NotSpecified:
+            self._isLeapFrog = isLeapFrogIntegrator(simulation.context.getIntegrator())
 
     def describeNextReport(self, simulation):
-        steps = self._reportInterval - simulation.currentStep%self._reportInterval
+        """Get information about the next report this object will generate.
+
+        Parameters:
+         - simulation (Simulation) The Simulation to generate a report for
+        Returns: A five element tuple.  The first element is the number of steps until the
+        next report.  The remaining elements specify whether that report will require
+        positions, velocities, forces, and energies respectively.
+        """
+        steps = self._reportInterval - simulation.currentStep % self._reportInterval
         return (steps, True, True, True, True)
 
     def report(self, simulation, state):
-        Xfin = state.getPositions() / nanometer
-        Vfin = state.getVelocities() / nanometer * picosecond
-        if self._integrator_name != "VelocityVerlet":
-            # We will attempt to get the velocities at the current time.  First obtain initial velocities.
-            v0 = Vfin * nanometer / picosecond
-            frc = state.getForces()
-            # Obtain masses.
-            mass = []
-            for i in range(simulation.context.getSystem().getNumParticles()):
-                mass.append(simulation.context.getSystem().getParticleMass(i)/dalton)
-            mass *= dalton
-            # Get accelerations.
-            accel = []
-            for i in range(simulation.context.getSystem().getNumParticles()):
-                accel.append(frc[i] / mass[i] / (kilojoule/(nanometer*mole*dalton)))# / (kilojoule/(nanometer*mole*dalton)))
-            accel *= kilojoule/(nanometer*mole*dalton)
-            # Propagate velocities backward by half a time step.
-            dv = accel
-            dv *= (+0.5 * self._timestep)
-            vmdt2 = []
-            for i in range(simulation.context.getSystem().getNumParticles()):
-                vmdt2.append((v0[i]/(nanometer/picosecond)) + (dv[i]/(nanometer/picosecond)))
-            # These are the velocities that we store (make sure it is unitless).
-            Vfin = vmdt2
-        Bfin = state.getPeriodicBoxVectors() / nanometer
-        with open(os.path.join(self._restart_filename),'w') as f: pickle.dump((Xfin, Vfin, Bfin),f)
+        """Generate a restart file
+
+        Parameters:
+         - simulation (Simulation) The Simulation to generate a report for
+         - state (State) The current state of the simulation
+        """
+        if not self._isInitialized:
+            self._initialize(simulation)
+            self._isInitialized = True
+
+        positions = state.getPositions().value_in_unit(nanometer)
+        boxVectors = state.getPeriodicBoxVectors().value_in_unit(nanometer)
+
+        timeStep = 0.5 * int(self._isLeapFrog) * simulation.getIntegrator().getStepSize()
+        velocities = state.getVelocities().value_in_unit(nanometer / picosecond)
+        velocities = computeShiftedVelocities(simulation.context, state,
+                        state.getVelocities(), timeStep).value_in_unit(nanometer / picosecond)
+
+        time = state.getTime().value_in_unit(picosecond)
+        step = simulation.currentStep
+        parameters = state.getParameters()
+
+        if os.path.exists(self._fileName):
+            # backup the current restart file, so that if the saving of the
+            # new restart file crashes, we don't loose the old restart file.
+            backup = tempfile.mkstemp()[1]
+            shutil.copy(self._fileName, backup)
+        else:
+            backup = None
+
+        try:
+            with open(self._fileName, 'w') as f:
+                pickle.dump({'version': RESTART_FORMAT_VERSION,
+                             'positions': positions,
+                             'boxVectors': boxVectors,
+                             'velocities': velocities,
+                             'time': time,
+                             'step': step,
+                             'parameters': parameters}, f)
+        except:
+            if backup is not None:
+                shutil.copy(backup, self._fileName)
+        finally:
+            if backup is not None:
+                os.unlink(backup)
+
 
 #-----------------------------------------------------------------------------
 # Functions
 #-----------------------------------------------------------------------------
 
-def read_restart_info(simulation, restart_filename, integrator_name, timestep):
-    # Load information from the restart file.
-    r_positions, r_velocities, r_boxes = pickle.load(open(restart_filename))
-    simulation.context.setPositions(r_positions * nanometer)
-    if simulation.topology.getUnitCellDimensions() != None:
-        simulation.context.setPeriodicBoxVectors(r_boxes[0] * nanometer,r_boxes[1] * nanometer, r_boxes[2] * nanometer)
-    if integrator_name != "VelocityVerlet":
-        # We will attempt to reconstruct the leapfrog velocities.  First obtain initial velocities.
-        v0 = r_velocities * nanometer / picosecond
-        frc = simulation.context.getState(getForces=True).getForces()
-        # Obtain masses.
-        mass = []
-        for i in range(simulation.context.getSystem().getNumParticles()):
-            mass.append(simulation.context.getSystem().getParticleMass(i)/dalton)
-        mass *= dalton
-        # Get accelerations.
-        accel = []
-        for i in range(simulation.context.getSystem().getNumParticles()):
-            accel.append(frc[i] / mass[i] / (kilojoule/(nanometer*mole*dalton)))# / (kilojoule/(nanometer*mole*dalton)))
-        accel *= kilojoule/(nanometer*mole*dalton)
-        # Propagate velocities backward by half a time step.
-        dv = accel
-        dv *= (-0.5 * timestep)
-        vmdt2 = []
-        for i in range(simulation.context.getSystem().getNumParticles()):
-            vmdt2.append((v0[i]/(nanometer/picosecond)) + (dv[i]/(nanometer/picosecond)))
-        vmdt2 *= nanometer/picosecond
-        # Assign velocities.
-        simulation.context.setVelocities(vmdt2)
-        simulation.context.applyVelocityConstraints(1e-4)
+def loadRestartFile(simulation, fileName, isLeapFrog=NotSpecified):
+    """Populate a simulation with data from a restart file.
+
+   Parameters:
+    - simulation (Simulation) The Simulation to populate.
+    - fileName (State) The file to read from, specified as a file name.
+    - isLeapFrog (bool) Flag indicating whether the simulation uses a leapfrog
+      style integrator, in which the velocities are offset from the positions
+      by 1/2 a timestep. If so, the velocities will be advanced after loading.
+      If not specified, we will inspect the integrator and attempt to make that
+      determination automatically.
+    """
+    with open(fileName) as f:
+        data = pickle.load(f)
+
+    if 'version' not in data or data['version'] != RESTART_FORMAT_VERSION:
+        raise ValueError("I don't know how to read this restart file.")
+
+    numParticles = simulation.getSystem().getNumParticles()
+    fields = ['positions', 'boxVectors', 'velocities', 'time', 'step', 'parameters']
+    for field in fields:
+        if field not in data:
+            raise KeyError('Restart file "%s" does not contain %s' % (fileName, field))
+
+    # set positions
+    numPositions = len(data['positions'])
+    if numPositions != numParticles:
+        raise ValueError('simulation contains %d particles, but restart '
+                         'file only contains %d positions' % (numParticles, numPositions))
+    simulation.context.setPositions(data['positions'])
+
+    # set box vectors
+    if len(data['boxVectors']) != 3:
+        raise ValueError('Periodic box vectors were malformed.')
+    simulation.context.setPeriodicBoxVectors(*data['boxVectors'])
+
+    # set velocities
+    if isLeapFrog == NotSpecified:
+        isLeapFrog = isLeapFrogIntegrator(simulation.getIntegrator())
+    timeShift = -0.5 * int(isLeapFrog) * simulation.getIntegrator().getStepSize()
+
+    numVelocities = len(data['velocities'])
+    if numVelocities != numParticles:
+        raise ValueError('simulation contains %d particles, but restart '
+                         'file only contains %d velocities' % (numParticles, numVelocities))
+    if timeShift == 0:
+        simulation.context.setVelocities(data['velocities'])
     else:
-        simulation.context.setVelocities(r_velocities * nanometer / picosecond)
+        state = simulation.context.getState(getForces=True)
+        computeShiftedVelocities(simulation.context, state, data['velocities'],
+                                 timeShift, leaveShiftedVelocitiesInContext=True)
+
+    # set time
+    simulation.context.setTime(data['time'])
+
+    # set step
+    simulation.currentStep = data['step']
+
+    # set parameters
+    for key, value in data['parameters'].iteritems():
+        simulation.context.setParameter(key, value)
