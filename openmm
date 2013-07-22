@@ -17,7 +17,7 @@ from simtk import unit
 from simtk.openmm import app
 from simtk import openmm as mm
 from ipcfg.progressreporter import ProgressReporter
-from ipcfg.restartreporter import RestartReporter, read_restart_info
+from ipcfg.restartreporter import RestartReporter, loadRestartFile
 from ipcfg.velocityverlet import VelocityVerletIntegrator
 
 # command line configuration system
@@ -583,7 +583,7 @@ class OpenMM(OpenMMApplication):
 
         if self.simulation.read_restart:
             self.log.info("Restarting simulation by reading from %s." % self.simulation.restart_file)
-            read_restart_info(simulation, self.simulation.restart_file, self.dynamics.integrator, self.dynamics.dt)
+            loadRestartFile(simulation, self.simulation.restart_file)
         else:
             self.script('simulation.context.setPositions(positions)')
             simulation.context.setPositions(positions)
@@ -613,8 +613,7 @@ class OpenMM(OpenMMApplication):
                           % (self.simulation.restart_freq, self.simulation.restart_file))
             self.script('simulation.reporters.append(RestartReporter(%s, %s, "%s"))'
                         % (self.simulation.restart_freq, self.simulation.restart_file, self.dynamics.integrator))
-            simulation.reporters.append(RestartReporter(self.simulation.restart_freq, self.simulation.restart_file,
-                                                        self.dynamics.integrator, self.dynamics.dt))
+            simulation.reporters.append(RestartReporter(self.simulation.restart_freq, self.simulation.restart_file))
 
         self.script('simulation.step(%s)' % self.simulation.n_steps)
         if self.show_script:

@@ -75,6 +75,8 @@ def computeShiftedVelocities(context, state, velocities, timeShift, leaveShifted
     for i in range(numParticles):
         if particleMasses[i] > 0:
             shiftedVelocities[i] = velocities[i] + forces[i] * (timeShift / particleMasses[i])
+        else:
+            shiftedVelocities[i] = velocities[i]
 
     # Apply constraints to them by round-tripping them through the context
     context.setVelocities(shiftedVelocities)
