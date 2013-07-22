@@ -174,14 +174,14 @@ class RestartReporter(object):
             backup = None
 
         try:
-            with open(self._fileName, 'w') as f:
+            with open(self._fileName, 'wb') as f:
                 pickle.dump({'version': RESTART_FORMAT_VERSION,
                              'positions': positions,
                              'boxVectors': boxVectors,
                              'velocities': velocities,
                              'time': time,
                              'step': step,
-                             'parameters': parameters}, f)
+                             'parameters': parameters}, f, pickle.HIGHEST_PROTOCOL)
         except:
             if backup is not None:
                 shutil.copy(backup, self._fileName)
@@ -206,7 +206,7 @@ def loadRestartFile(simulation, fileName, isLeapFrog=NotSpecified):
       If not specified, we will inspect the integrator and attempt to make that
       determination automatically.
     """
-    with open(fileName) as f:
+    with open(fileName, 'rb') as f:
         data = pickle.load(f)
 
     if 'version' not in data or data['version'] != RESTART_FORMAT_VERSION:
