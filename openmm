@@ -227,12 +227,13 @@ class System(AppConfigurable):
         active_traits = ['nb_method', 'constraints', 'rigid_water', 'rand_vels']
         if self.nb_method in ['PME', 'Ewald']:
             active_traits.append('ewald_tol')
-
+            
         if self.nb_method != 'NoCutoff':
             active_traits.append('cutoff')
 
         if self.rand_vels:
             active_traits.append('gen_temp')
+        
         return active_traits
 
     def validate(self):
@@ -482,7 +483,12 @@ class OpenMM(OpenMMApplication):
     is_amoeba_system = CBool(False)
     def _is_amoeba_system_default(self):
         # Determine whether this is an AMOEBA system.
-        return any(['Amoeba' in f.__class__.__name__ for f in self.system.getForces()])
+        return False
+
+        # This doesn't currently work, because self.system is not the OpenMM system,
+        # it's the set of system configurable options (the class above), and it doesn't
+        # have a getForces method.
+        #return any(['Amoeba' in f.__class__.__name__ for f in self.system.getForces()])
 
     _script_initialized = CBool(False)
 
