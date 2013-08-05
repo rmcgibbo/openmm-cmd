@@ -11,6 +11,8 @@ import shutil
 import logging
 import platform
 from datetime import datetime
+# Introduces Python 2.7 dependency, is this okay?
+from collections import OrderedDict
 
 # openmm
 from simtk import unit
@@ -19,6 +21,9 @@ from simtk import openmm as mm
 from ipcfg.progressreporter import ProgressReporter
 from ipcfg.restartreporter import RestartReporter, loadRestartFile
 from ipcfg.velocityverlet import VelocityVerletIntegrator
+
+# XML parsing
+import xml.etree.ElementTree as etree
 
 # command line configuration system
 from ipcfg.extratraitlets import Quantity
@@ -38,7 +43,7 @@ class General(AppConfigurable):
     """
 
     protein = CaselessStrEnum(['amber96', 'amber99sb', 'amber99sb-ildn',
-        'amber99sb-nmr', 'amber03', 'amber10', 'None'], allow_none=None, config=True,
+        'amber99sb-nmr', 'amber03', 'amber10', 'amoeba2009', 'None'], allow_none=None, config=True,
         default_value='None', help=''' Forcefield to use for the protein atoms.
         For details, consult the literature.''')
     water = CaselessStrEnum(['SPC/E', 'TIP3P', 'TIP4-Ew', 'TIP5P', 'Implicit', 'None'],
@@ -121,12 +126,15 @@ class General(AppConfigurable):
                 files.append('amber03_obc.xml')
             elif self.protein == 'amber10':
                 files.append('amber10_obc.xml')
+            elif self.protein == 'amoeba2009':
+                files.append('amoeba2009_gk.xml')
             else:
                 self.error("Without specifying the protein forcefield, I can't"
-                           "unambiguously pick the GBSA implicit solvent parameters.")
+                           "unambiguously pick the implicit solvent parameters.")
         else:
-            self.log.warning("No builtin water forcefield is being used. If you'd "
-                             "like to specify a water forcefield, use --water.")
+            if self.protein != 'amoeba2009': # AMOEBA automatically includes a water model.
+                self.log.warning("No builtin water model is being used. If you'd "
+                             "like to specify a water model, use --water.")
 
         if len(files) == 0:
             self.application.error('No forcefields were loaded. You can use OpenMM supplied '
@@ -136,7 +144,23 @@ class General(AppConfigurable):
 
         self.application.script('forcefield = app.ForceField(%s)' %
                ', '.join(["'%s'" % f for f in files]))
-        return app.ForceField(*files)
+
+        is_amoeba_ff = False
+        for fn in files:
+            try:
+                tree = etree.parse(fn)
+            except IOError:
+                tree = etree.parse(os.path.join(os.path.dirname(app.__file__), 'data', fn))
+            xmlroot = tree.getroot()
+            if xmlroot.tag.lower() != 'forcefield':
+                self.application.error('Tried to load %s as a force field XML file, but the first tag is %s. '
+                                       'You may load system XML files using the "sysxml" option'  % (fn, xmlroot.tag))
+            for child in xmlroot:
+                if 'amoeba' in child.tag.lower() and is_amoeba_ff == False:
+                    self.log.info('Detected AMOEBA force field!')
+                    is_amoeba_ff = True
+
+        return app.ForceField(*files), is_amoeba_ff
 
     def get_positions(self):
         "Get the positions for every atom"
@@ -212,12 +236,33 @@ class System(AppConfigurable):
     cutoff = Quantity(1.0 * unit.nanometers, config=True,
         help='''Cutoff for long-range non-bonded interactions. This option is
         used for all non-bonded methods except for "NoCutoff".''')
+    vdw_cutoff = Quantity(1.0 * unit.nanometers, config=True,
+        help='''Specific cutoff for van der Waals interactions used in the 
+        AMOEBA force field.''')
+    pme_grid = List([24, 24, 24], config=True, help='''Specify a 3-vector for the PME grid
+        dimensions in AMOEBA (also requires aewald parameter.)''', nargs=3)
+    aewald = CFloat(5.4459052, config=True, allow_none=False, help='''The error
+        tolerance is roughly equal to the fractional error in the forces due
+        to truncating the Ewald summation.''')
+    polarization = CaselessStrEnum(['direct', 'mutual'],
+        default_value='mutual', allow_none=False, config=True, help='''Choose
+        direct or mutual polarization for the AMOEBA polarizable force field.''')
+    polar_eps = CFloat(1e-6, allow_none=False, config=True, help='''Choose
+        SCF tolerance for polarizable force field (e.g. AMOEBA with polarization mutual).''')
+    disp_corr = CBool(True, config=True, help='''Apply an isotropic long-range
+    correction for the vdW interactions.''')
     rand_vels = CBool(True, config=True, help='''Initialize the system
         with random initial velocities, drawn from the Maxwell Boltzmann
         distribution.''')
     gen_temp = Quantity(300 * unit.kelvin, config=True, help='''Temperature
         used for generating initial velocities. This option is only used if
         rand_vels == True.''')
+    is_amoeba_ff = CBool(False, config=False, help='''This flag is set after 
+        the force field is read in, and signifies whether we have an AMOEBA
+        force field.''')
+    aewald_pmegrid = CBool(False, config=False, help='''This flag is set after 
+        the force field is read in, and signifies whether we are specifying PME
+        using "aewald + pme_grid" rather than "ewald_tol" for the AMOEBA force field.''')
 
     def active_config_traits(self):
         """Construct a list of all of the configurable traits that are currently
@@ -225,6 +270,10 @@ class System(AppConfigurable):
         simulation.
         """
         active_traits = ['nb_method', 'constraints', 'rigid_water', 'rand_vels']
+
+        if self.nb_method in ['CutoffPeriodic', 'PME', 'Ewald']:
+            active_traits.append('disp_corr')
+
         if self.nb_method in ['PME', 'Ewald']:
             active_traits.append('ewald_tol')
 
@@ -233,6 +282,18 @@ class System(AppConfigurable):
 
         if self.rand_vels:
             active_traits.append('gen_temp')
+
+        if self.is_amoeba_ff:
+            if self.aewald_pmegrid:
+                # LPW: I introduced this because the user should be able
+                # to specify aewald and pme_grid to override ewald_tol.
+                active_traits.remove('ewald_tol')
+                active_traits.append('aewald')
+                active_traits.append('pme_grid')
+            active_traits.append('vdw_cutoff')
+            active_traits.append('polarization')
+            if self.polarization == 'mutual':
+                active_traits.append('polar_eps')
 
         return active_traits
 
@@ -276,7 +337,7 @@ class Dynamics(AppConfigurable):
     pressure = Quantity(1 * unit.atmosphere, config=True, help='''Pressure
         target, used by a barostat.''')
     pressure3 = List([1, 1, 1], config=True, help='''Pressure
-        target, used by the Monte Carlo anisotropic barostat.''')
+        target, used by the Monte Carlo anisotropic barostat.''', nargs=3)
     scalex = CBool(True, config=True, help='''Switch for scaling the x-axis,
         used by the Monte Carlo anisotropic barostat.''')
     scaley = CBool(True, config=True, help='''Switch for scaling the y-axis,
@@ -480,15 +541,6 @@ class OpenMM(OpenMMApplication):
         return True
     def _log_level_default(self):
         return logging.INFO
-    is_amoeba_system = CBool(False)
-    def _is_amoeba_system_default(self):
-        # Determine whether this is an AMOEBA system.
-        return False
-
-        # This doesn't currently work, because self.system is not the OpenMM system,
-        # it's the set of system configurable options (the class above), and it doesn't
-        # have a getForces method.
-        #return any(['Amoeba' in f.__class__.__name__ for f in self.system.getForces()])
 
     _script_initialized = CBool(False)
 
@@ -550,32 +602,75 @@ class OpenMM(OpenMMApplication):
                              "since %s implies you're using a nonperiodic system. But adjusting "
                              "the box volume (the way that the barostat controls the pressure) "
                              "will have no effect." % self.system.nb_method)
-        if self.is_amoeba_system and (self.general.platform not in ['Reference', 'CUDA'] or
-            (self.general.platform == 'NotSpecified' and self.general.fastest_platform not in ['Reference', 'CUDA'])):
-                # Should I use TraitError or NotImplementedError?
-                raise TraitError("The AMOEBA force field is only implemented on the Reference or CUDA platforms.")
 
+    def validate_ff(self, forcefield):
+        """Run validation on the force field and build the option dictionary that gets passed to createSystem()."""
+        if self.system.is_amoeba_ff and (self.general.platform not in ['Reference', 'CUDA'] or
+            (self.general.platform == 'NotSpecified' and self.general.fastest_platform not in ['Reference', 'CUDA'])):
+                self.error("The AMOEBA force field is only implemented on the Reference or CUDA platforms.")
+
+        # The option dictionary that gets passed to createSystem() is initialized.
+        option_dict = OrderedDict([('nonbondedMethod',getattr(app, self.system.nb_method)),
+                                   ('nonbondedCutoff',self.system.cutoff),
+                                   ('constraints',getattr(app, self.system.constraints)),
+                                   ('rigidWater',self.system.rigid_water)])
+
+        # Set the dispersion correction if we have periodic boundary conditions.
+        if self.system.nb_method in ['CutoffPeriodic', 'Ewald', 'PME']:
+            option_dict['useDispersionCorrection'] = self.system.disp_corr
+
+        if self.system.is_amoeba_ff:
+            # Set AMOEBA specific options.
+            if 'vdw_cutoff' in self.system.specified_config_traits:
+                option_dict['vdwCutoff'] = self.system.vdw_cutoff
+            option_dict['polarization'] = self.system.polarization
+            # Set polar_eps if using mutual polarization
+            if self.system.polarization == 'mutual':
+                option_dict['polar_eps'] = self.system.polar_eps
+            elif 'polar_eps' in self.system.specified_config_traits:
+                self.error("The polar_eps option is used in mutual polarization only.")
+        else:
+            # Crash if the user specifies AMOEBA options without the AMOEBA force field.
+            for i in ['aewald', 'pme_grid', 'vdw_cutoff', 'polarization', 'polar_eps']:
+                if i in self.system.specified_config_traits:
+                    self.error("The %s option is only valid when using the AMOEBA polarizable force field.")
+        
+        # The logic here allows the user to override ewald_tol if they specify both aewald and pme_grid.
+        # However, if all three are specified, it errors out.
+        if any([i in self.system.specified_config_traits for i in ['aewald', 'pme_grid']]):
+            if not all([i in self.system.specified_config_traits for i in ['aewald', 'pme_grid']]):
+                self.error("To use aewald/pme_grid with the AMOEBA force field, both options must be specified.")
+            else:
+                self.system.aewald_pmegrid = True
+                if 'ewald_tol' in self.system.specified_config_traits:
+                    self.error("You may specify either aewald+pme_grid or ewald_tol, but you cannot specify all three.")
+        if not self.system.aewald_pmegrid:
+            option_dict['ewaldErrorTolerance'] = self.system.ewald_tol
+        else:
+            option_dict['pmeGridDimensions'] = [int(i) for i in self.system.pme_grid]
+            option_dict['aEwald'] = self.system.aewald
+
+        return option_dict
+        
     def start(self):
-        self.print_config()
 
         topology = self.general.get_topology()
         positions = self.general.get_positions()
-        forcefield = self.general.get_forcefield()
+        forcefield, self.system.is_amoeba_ff = self.general.get_forcefield()
+        # Perform validation on the force field to make sure it's valid for creating the System.
+        system_options = self.validate_ff(forcefield)
+        # Need to create a second dictionary for printing because of "enums".
+        print_options = OrderedDict([(i, j) for i, j in system_options.items()])
+        print_options['nonbondedMethod'] = self.system.nb_method
+        print_options['constraints'] = self.system.constraints
 
+        self.print_config()
         self.generate_config_file()
 
-        self.script('system = forcefield.createSystem(topology, nonbondedMethod=%s, '
-               'nonbondedCutoff=%s, constraints=%s, rigidWater=%s, '
-               'ewaldErrorTolerance=%s)' % (self.system.nb_method,
-               self.system.cutoff, self.system.constraints,
-               self.system.rigid_water, self.system.ewald_tol))
+        self.script('system = forcefield.createSystem(topology,' 
+                    + ','.join(["%s=%s" % (key,val) for key, val in print_options.items()])+')')
 
-        system = forcefield.createSystem(topology,
-            nonbondedMethod=getattr(app, self.system.nb_method),
-            nonbondedCutoff=self.system.cutoff,
-            constraints=getattr(app, self.system.constraints),
-            rigidWater=self.system.rigid_water,
-            ewaldErrorTolerance=self.system.ewald_tol)
+        system = forcefield.createSystem(topology, **system_options)
 
         for force in self.dynamics.get_forces():
             system.addForce(force)
