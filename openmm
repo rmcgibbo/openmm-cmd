@@ -52,6 +52,10 @@ class General(AppConfigurable):
     ffxml = List(config=True, help='''Supply one or more custom forcefield files,
         in the OpenMM XML format. This can be used to specify a forcefield for
         ligands, nonstandard amino acids, etc.''', nargs='+')
+    sysxml = CBytes(config=True, help='''Supply one OpenMM system XML file, which
+        comes from a serialized System object and provides a complete system.''')
+    prmtop = CBytes(config=True, help='''Supply one AMBER prmtop file, which provides
+        a complete topology and system.''')
     platform = CaselessStrEnum(['Reference', 'OpenCL', 'CUDA', 'NotSpecified'],
         default_value='NotSpecified', allow_none=False, help='''OpenMM runs
         simulations on three platforms: Reference, CUDA, and OpenCL. If not
@@ -60,10 +64,12 @@ class General(AppConfigurable):
     precision = CaselessStrEnum(['Single', 'Mixed', 'Double'], config=True,
         allow_none=False, default_value='Mixed', help='''Level of numeric
         precision to use for calculations.''')
-    coords = CBytes(config=True, help='''OpenMM can take a pdb...''')
+    coords = CBytes(config=True, help='''OpenMM can take a pdb, which contains
+        the coordinates and topology, or AMBER inpcrd, which contains coordinates.'''_)
 
     # nonconfigurable traits
     pdb_file = Instance(app.PDBFile)
+    inpcrd_file = Instance(app.AmberInpcrdFile)
     fastest_platform = CBytes(help='The name of the fastest platform on the system')
     def _fastest_platform_default(self):
         fastest, speed = -1, -1
@@ -90,19 +96,32 @@ class General(AppConfigurable):
         if 'precision' in self.specified_config_traits and self.platform not in ['OpenCL', 'CUDA']:
             raise TraitError('Manually setting the precision is only '
                              'appropriate on the OpenCL and CUDA platforms')
-
+        if 'sysxml' in self.specified.config_traits:
+            if any([i in self.specified_config_traits for i in ['ffxml', 'prmtop', 'protein', 'water']]):
+                raise TraitError('Since sysxml was specified, you should not specify ffxml / prmtop / protein / water.')
+        if 'prmtop' in self.specified.config_traits:
+            if any([i in self.specified_config_traits for i in ['ffxml', 'protein', 'water']]):
+                raise TraitError('Since prmtop was specified, you should not specify ffxml / protein / water.')
+        if self.coords.endswith('inpcrd'):
+            if 'prmtop' not in self.specified.config_traits:
+                raise TraitError('You specified AMBER coordinates (inpcrd) which also requires a prmtop file.')
+                
     def load_coords(self):
         "Load coordinate/topology files from disk"
         if self.coords.endswith('.pdb'):
             if self.pdb_file is None:
                 self.application.script("pdb = app.PDBFile('%s')" % self.coords)
                 self.pdb_file = app.PDBFile(self.coords)
+        elif self.coords.endswith('.inpcrd'):
+            if self.inpcrd_file is None:
+                self.application.script("inpcrd = app.AmberInpcrdFile('%s')" % self.coords)
+                self.inpcrd_file = app.AmberInpcrdFile(self.coords)
         elif self.coords == '':
             self.application.error('You must provide a coordinate file, either in the'
                                    'configuration file or on the command line using, '
-                                   'for example, --coords protein.pdb')
+                                   'for example, --coords protein.pdb or --coords protein.inpcrd')
         else:
-            raise NotImplementedError('Currently, only reading from pdb files '
+            raise NotImplementedError('Currently,only reading from pdb and inpcrd files '
                                       'is implemented')
 
     def get_forcefield(self):
@@ -161,6 +180,36 @@ class General(AppConfigurable):
                     is_amoeba_ff = True
 
         return app.ForceField(*files), is_amoeba_ff
+
+    def get_system_from_sysxml(self):
+        "Create the System object from a system XML file"
+
+        is_amoeba_ff = False
+
+        fn = self.sysxml
+
+        try:
+            tree = etree.parse(fn)
+        except:
+            raise RuntimeError('Failed to load XML file: %s' % fn)
+
+        xmlroot = tree.getroot()
+        if xmlroot.tag.lower() != 'system':
+            self.application.error('Tried to load %s as a system XML file, but the first tag is %s. '
+                                   'You may load force field XML files using the "ffxml" option'  % (fn, xmlroot.tag))
+
+        for child in xmlroot:
+            if 'amoeba' in child.tag.lower() and is_amoeba_ff == False:
+                self.log.info('Detected AMOEBA system!')
+                is_amoeba_ff = True
+
+        self.application.script('system = XmlSerializer.deserializeSystem(open(%s).read())' % fn)
+        system = mm.XmlSerializer.deserializeSystem(open(fn).read())
+
+        return system
+
+    def get_prmtop(self):
+        return app.AmberPrmtopFile(self.prmtop)
 
     def get_positions(self):
         "Get the positions for every atom"
@@ -263,6 +312,8 @@ class System(AppConfigurable):
     aewald_pmegrid = CBool(False, config=False, help='''This flag is set after 
         the force field is read in, and signifies whether we are specifying PME
         using "aewald + pme_grid" rather than "ewald_tol" for the AMOEBA force field.''')
+    from_sysxml = CBool(False, config=False, help='''This flag is set if the system
+        is obtained from a system XML file, which will override most user-provided options.''')
 
     def active_config_traits(self):
         """Construct a list of all of the configurable traits that are currently
@@ -294,6 +345,10 @@ class System(AppConfigurable):
             active_traits.append('polarization')
             if self.polarization == 'mutual':
                 active_traits.append('polar_eps')
+
+        # Throw all this out if we're using a system XML.
+        if self.from_sysxml:
+            active_traits = []
 
         return active_traits
 
@@ -352,32 +407,40 @@ class Dynamics(AppConfigurable):
         maintain a constant temperature simulation.''')
     dt = Quantity(2 * unit.femtoseconds, config=True, help='''Timestep
         for fixed-timestep integrators.''')
+    from_sysxml = CBool(False, config=False, help='''This flag is set if the system
+        is obtained from a system XML file, which will override most user-provided options.''')
 
     def active_config_traits(self):
         """Construct a list of all of the configurable traits that are currently
         'active', in the sense that their value will have some effect on the
         simulation.
         """
-        active_traits = ['integrator', 'barostat', 'thermostat']
+        active_traits = ['integrator']
+
         if self.integrator in ['Langevin', 'Verlet', 'VelocityVerlet', 'Brownian']:
             active_traits.append('dt')
         else:
             active_traits.append('tolerance')
 
-        if self.barostat == 'MonteCarlo':
-            active_traits.append('pressure')
-            active_traits.append('barostat_interval')
+        if not self.from_sysxml:
+            active_traits.append('barostat')
+            active_traits.append('thermostat')
 
-        if self.barostat == 'MonteCarloAnisotropic':
-            active_traits.append('pressure3')
-            active_traits.append('barostat_interval')
-            active_traits.append('scalex')
-            active_traits.append('scaley')
-            active_traits.append('scalez')
+            if self.barostat == 'MonteCarlo':
+                active_traits.append('pressure')
+                active_traits.append('barostat_interval')
 
-        if self.integrator in ['Langevin', 'VariableLangevin', 'Brownian'] or self.thermostat == 'Andersen':
+            if self.barostat == 'MonteCarloAnisotropic':
+                active_traits.append('pressure3')
+                active_traits.append('barostat_interval')
+                active_traits.append('scalex')
+                active_traits.append('scaley')
+                active_traits.append('scalez')
+
+        if self.integrator in ['Langevin', 'VariableLangevin', 'Brownian'] or (not self.from_sysxml and self.thermostat == 'Andersen'):
             active_traits.append('temp')
             active_traits.append('collision_rate')
+
         return active_traits
 
     def validate(self):
@@ -603,7 +666,7 @@ class OpenMM(OpenMMApplication):
                              "the box volume (the way that the barostat controls the pressure) "
                              "will have no effect." % self.system.nb_method)
 
-    def validate_ff(self, forcefield):
+    def validate_system(self):
         """Run validation on the force field and build the option dictionary that gets passed to createSystem()."""
         if self.system.is_amoeba_ff and (self.general.platform not in ['Reference', 'CUDA'] or
             (self.general.platform == 'NotSpecified' and self.general.fastest_platform not in ['Reference', 'CUDA'])):
@@ -656,24 +719,37 @@ class OpenMM(OpenMMApplication):
 
         topology = self.general.get_topology()
         positions = self.general.get_positions()
-        forcefield, self.system.is_amoeba_ff = self.general.get_forcefield()
-        # Perform validation on the force field to make sure it's valid for creating the System.
-        system_options = self.validate_ff(forcefield)
-        # Need to create a second dictionary for printing because of "enums".
-        print_options = OrderedDict([(i, j) for i, j in system_options.items()])
-        print_options['nonbondedMethod'] = self.system.nb_method
-        print_options['constraints'] = self.system.constraints
+
+        # Set up the system from system XML file.
+        if 'sysxml' in self.general.specified_config_traits:
+            self.system.from_sysxml = True
+            self.dynamics.from_sysxml = True 
+            system = self.get_system_from_sysxml()
+            
+        else:
+            # Set up the system from AMBER prmtop file.
+            if 'prmtop' in self.general.specified_config_traits:
+                prmtop = self.general.get_prmtop()
+                
+            # Set up the system from force field XML files.
+            elif len(self.ffxml) > 0:
+                forcefield, self.system.is_amoeba_ff = self.general.get_forcefield()
+
+            # Perform a second validation step and generate options for setting up the system.
+            system_options = self.validate_system()
+
+            # Need to create a second dictionary for printing because of "enums".
+            print_options = OrderedDict([(i, j) for i, j in system_options.items()])
+            print_options['nonbondedMethod'] = self.system.nb_method
+            print_options['constraints'] = self.system.constraints
+            self.script('system = forcefield.createSystem(topology,' 
+                        + ','.join(["%s=%s" % (key,val) for key, val in print_options.items()])+')')
+            system = forcefield.createSystem(topology, **system_options)
+            for force in self.dynamics.get_forces():
+                system.addForce(force)
 
         self.print_config()
         self.generate_config_file()
-
-        self.script('system = forcefield.createSystem(topology,' 
-                    + ','.join(["%s=%s" % (key,val) for key, val in print_options.items()])+')')
-
-        system = forcefield.createSystem(topology, **system_options)
-
-        for force in self.dynamics.get_forces():
-            system.addForce(force)
 
         integrator = self.dynamics.get_integrator()
         platform = self.general.get_platform()
