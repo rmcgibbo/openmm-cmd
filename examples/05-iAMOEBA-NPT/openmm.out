@@ -1,0 +1,99 @@
+
+>>> ###################################################################
+>>> # To use this script, paste all of the lines starting with the
+>>> # three less than signs (>>>) into a python interpreter.
+>>> ###################################################################
+>>> 
+>>> from simtk.unit import *
+>>> from simtk import openmm as mm
+>>> from simtk.openmm import app
+>>> 
+>>> pdb = app.PDBFile('waterbox.pdb')
+>>> topology = pdb.topology
+>>> positions = pdb.positions
+>>> forcefield = app.ForceField('iamoeba.xml')
+>>> system = forcefield.createSystem(topology,nonbondedMethod=PME,nonbondedCutoff=1.
+... 0*nanometer,constraints=HBonds,rigidWater=False,useDispersionCorrection=True,pol
+... arization=direct,ewaldErrorTolerance=0.0005)
+>>> system.addForce(mm.MonteCarloBarostat(1*atmosphere, 300*kelvin, 25)
+########################################################################
+# Option Summary. A more detailed config file is saved to config.out.ini
+########################################################################
+
+[General]                       
+protein = None                   # default value
+water = None                     # default value
+platform = CUDA                  # your selection
+coords = waterbox.pdb            # your selection
+precision = Mixed                # default value
+ffxml = iamoeba.xml              # your selection
+
+[System]                        
+nb_method = PME                  # default value
+constraints = HBonds             # default value
+rigid_water = False              # your selection
+rand_vels = True                 # default value
+disp_corr = True                 # default value
+ewald_tol = 0.0005               # default value
+cutoff = 1.0*nanometer           # default value
+gen_temp = 300*kelvin            # default value
+vdw_cutoff = 1.0*nanometer       # default value
+polarization = direct            # your selection
+
+[Dynamics]                      
+integrator = Langevin            # default value
+dt = 0.5*femtosecond             # your selection
+barostat = MonteCarlo            # your selection
+thermostat = None                # default value
+pressure = 1*atmosphere          # default value
+barostat_interval = 25           # default value
+temp = 300*kelvin                # default value
+collision_rate = 1.0/picosecond  # default value
+
+[Simulation]                    
+n_steps = 20000                  # your selection
+restart_file = restart.p         # default value
+minimize = True                  # default value
+restart_freq = 5000              # default value
+traj_file = output.dcd           # default value
+read_restart = False             # default value
+progress_freq = 1000             # default value
+write_restart = True             # default value
+traj_freq = 1000                 # default value
+
+>>> integrator = mm.LangevinIntegrator(300*kelvin, 1.0/picosecond, 0.5*femtosecond)
+>>> platform = mm.Platform.getPlatformByName('CUDA')
+>>> platformProperties = {'CudaPrecision': 'mixed'}
+>>> simulation = app.Simulation(topology, system, integrator, platform, properties)
+>>> simulation.context.setPositions(positions)
+>>> simulation.minimizeEnergy()
+>>> simulation.context.setVelocitiesToTemperature()
+>>> simulation.reporters.append(ProgressReporter(sys.stdout, 1000, 20000))
+>>> simulation.reporters.append(DCDReporter(output.dcd, 1000))
+>>> simulation.reporters.append(RestartReporter(restart.p, 5000))
+>>> simulation.step(20000)
+
+
+Progress WallTime Left    Speed          Time            P.E.          K.E.      Total E.          Temp      Vol        Rho
+     (%)     (d:h:m:s) (ns/day)          (ps)        (kJ/mol)      (kJ/mol)      (kJ/mol)           (K)   (nm^3)     (g/mL)
+  0.000%            ??     0.00       0.00000    -24835.51350    4339.33833  -20496.17517     298.48546    15.00     0.9972
+  5.000%         11:26     1.20       0.50000    -21758.29586    3040.71470  -18717.58116     209.15841    14.90     1.0036
+ 10.000%         10:50     1.19       1.00000    -21245.13900    3458.64992  -17786.48909     237.90648    14.96     0.9996
+ 15.000%         10:15     1.19       1.50000    -20905.16804    3785.22039  -17119.94764     260.36994    15.16     0.9866
+ 20.000%          9:38     1.19       2.00000    -20538.74060    3999.92326  -16538.81734     275.13847    15.17     0.9859
+ 25.000%          9:02     1.19       2.50000    -20283.04616    4243.82493  -16039.22123     291.91548    15.24     0.9814
+ 30.000%          8:25     1.20       3.00000    -19982.32628    4207.47357  -15774.85272     289.41502    15.06     0.9930
+ 35.000%          7:49     1.20       3.50000    -19901.75125    4322.39292  -15579.35833     297.31985    15.11     0.9901
+ 40.000%          7:13     1.20       4.00000    -19820.02758    4386.02356  -15434.00403     301.69674    15.30     0.9777
+ 45.000%          6:36     1.20       4.50000    -19752.47520    4201.98082  -15550.49437     289.03719    15.24     0.9817
+ 50.000%          6:00     1.20       5.00000    -20030.02916    4341.49848  -15688.53068     298.63405    15.26     0.9805
+ 55.000%          5:24     1.20       5.50000    -19907.40073    4439.99193  -15467.40879     305.40901    15.36     0.9736
+ 60.000%          4:48     1.20       6.00000    -19956.81429    4293.25707  -15663.55722     295.31571    14.96     1.0000
+ 65.000%          4:12     1.20       6.50000    -19737.40820    4225.36118  -15512.04702     290.64543    15.07     0.9926
+ 70.000%          3:36     1.20       7.00000    -19546.77066    4267.86703  -15278.90362     293.56924    15.07     0.9926
+ 75.000%          3:00     1.20       7.50000    -19447.85181    4373.40222  -15074.44959     300.82857    15.59     0.9595
+ 80.000%          2:23     1.20       8.00000    -19678.54626    4438.57469  -15239.97157     305.31152    15.35     0.9742
+ 85.000%          1:47     1.20       8.50000    -19600.72094    4386.35744  -15214.36349     301.71971    15.49     0.9655
+ 90.000%          1:11     1.20       9.00000    -19667.25771    4265.38482  -15401.87289     293.39850    14.97     0.9993
+ 95.000%          0:35     1.20       9.50000    -19643.20676    4414.57308  -15228.63368     303.66055    15.12     0.9891
+100.000%          0:00     1.20      10.00000    -19698.72228    4235.92958  -15462.79270     291.37239    14.96     1.0000

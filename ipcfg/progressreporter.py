@@ -65,10 +65,10 @@ class ProgressReporter(StateDataReporter):
                    ('Temp', '(K)'),
                   ]
 
-        widths =  [8,          13,      8,        13,       15,
-                   13,         13,      13,       8]
-        formats = ['%7.3f%%', '%13.5s', '%8.2f', '%13.5f', '%15.5f',
-                   '%13.5f', '%13.5f', '%13.5f', '%8.2f']
+        widths =  [8,          15,      10,        13,       15,
+                   15,         15,      13]
+        formats = ['%7.3f%%', '%15s', '%10.2f', '%13.5f', '%15.5f',
+                   '%15.5f', '%15.5f', '%13.5f']
 
         if self._volume:
             headers.append(('Vol', '(nm^3)'))

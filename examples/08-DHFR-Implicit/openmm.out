@@ -1,0 +1,79 @@
+
+>>> ###################################################################
+>>> # To use this script, paste all of the lines starting with the
+>>> # three less than signs (>>>) into a python interpreter.
+>>> ###################################################################
+>>> 
+>>> from simtk.unit import *
+>>> from simtk import openmm as mm
+>>> from simtk.openmm import app
+>>> 
+>>> pdb = app.PDBFile('dhfr.pdb')
+>>> topology = pdb.topology
+>>> positions = pdb.positions
+>>> forcefield = app.ForceField('amber99sb.xml', 'amber99_obc.xml')
+>>> system = forcefield.createSystem(topology,nonbondedMethod=NoCutoff,constraints=H
+... Bonds,rigidWater=True)
+########################################################################
+# Option Summary. A more detailed config file is saved to config.out.ini
+########################################################################
+
+[General]                       
+protein = amber99sb              # your selection
+water = Implicit                 # your selection
+platform = NotSpecified          # default value
+coords = dhfr.pdb                # your selection
+precision = Mixed                # default value
+
+[System]                        
+nb_method = NoCutoff             # your selection
+constraints = HBonds             # default value
+rigid_water = True               # default value
+rand_vels = True                 # default value
+gen_temp = 300*kelvin            # default value
+
+[Dynamics]                      
+integrator = Langevin            # default value
+dt = 2*femtosecond               # default value
+barostat = None                  # default value
+thermostat = None                # default value
+temp = 300*kelvin                # default value
+collision_rate = 1.0/picosecond  # default value
+
+[Simulation]                    
+n_steps = 10000                  # default value
+restart_file = restart.p         # default value
+minimize = True                  # default value
+restart_freq = 5000              # default value
+traj_file = output.dcd           # default value
+read_restart = False             # default value
+progress_freq = 1000             # default value
+write_restart = True             # default value
+traj_freq = 1000                 # default value
+
+>>> integrator = mm.LangevinIntegrator(300*kelvin, 1.0/picosecond, 2*femtosecond)
+>>> platform = mm.Platform.getPlatformByName('CUDA')
+>>> platformProperties = {'CudaPrecision': 'mixed'}
+>>> simulation = app.Simulation(topology, system, integrator, platform, properties)
+>>> simulation.context.setPositions(positions)
+>>> simulation.minimizeEnergy()
+>>> simulation.context.setVelocitiesToTemperature()
+>>> simulation.reporters.append(ProgressReporter(sys.stdout, 1000, 10000))
+>>> simulation.reporters.append(DCDReporter(output.dcd, 1000))
+>>> simulation.reporters.append(RestartReporter(restart.p, 5000))
+>>> simulation.step(10000)
+
+
+Progress WallTime Left    Speed          Time            P.E.          K.E.      Total E.          Temp
+     (%)     (d:h:m:s) (ns/day)          (ps)        (kJ/mol)      (kJ/mol)      (kJ/mol)           (K)
+  0.000%            ??     0.00       0.00000    -23197.99408    7677.60854  -15520.38554     295.82027
+ 10.000%          1:45    14.80       2.00000    -15427.68118    7054.00457   -8373.67661     271.79264
+ 20.000%          1:32    14.87       4.00000    -14998.02229    7418.21762   -7579.80467     285.82587
+ 30.000%          1:21    14.90       6.00000    -15150.39017    7820.05317   -7330.33700     301.30870
+ 40.000%          1:09    14.91       8.00000    -14994.42006    7596.40380   -7398.01627     292.69143
+ 50.000%          0:57    14.91      10.00000    -15199.46995    7942.37777   -7257.09217     306.02190
+ 60.000%          0:46    14.89      12.00000    -15261.26709    7530.06553   -7731.20156     290.13540
+ 70.000%          0:34    14.90      14.00000    -15161.67066    7760.23671   -7401.43395     299.00395
+ 80.000%          0:23    14.90      16.00000    -15170.74294    7809.12730   -7361.61564     300.88772
+ 90.000%          0:11    14.91      18.00000    -15421.71027    7781.24295   -7640.46731     299.81333
+100.000%          0:00    14.91      20.00000    -15325.67259    7890.91764   -7434.75495     304.03912

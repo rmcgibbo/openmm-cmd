@@ -54,6 +54,8 @@ class General(AppConfigurable):
         ligands, nonstandard amino acids, etc.''', nargs='+')
     sysxml = CBytes(config=True, help='''Supply one OpenMM system XML file, which
         comes from a serialized System object and provides a complete system.''')
+    serialize = CBytes(config=True, help='''Write a system XML file, which this program
+        can read using the "sysxml" option.''')
     prmtop = CBytes(config=True, help='''Supply one AMBER prmtop file, which provides
         a complete topology and system.''')
     platform = CaselessStrEnum(['Reference', 'OpenCL', 'CUDA', 'NotSpecified'],
@@ -65,7 +67,7 @@ class General(AppConfigurable):
         allow_none=False, default_value='Mixed', help='''Level of numeric
         precision to use for calculations.''')
     coords = CBytes(config=True, help='''OpenMM can take a pdb, which contains
-        the coordinates and topology, or AMBER inpcrd, which contains coordinates.'''_)
+        the coordinates and topology, or AMBER inpcrd, which contains coordinates.''')
 
     # nonconfigurable traits
     pdb_file = Instance(app.PDBFile)
@@ -96,14 +98,14 @@ class General(AppConfigurable):
         if 'precision' in self.specified_config_traits and self.platform not in ['OpenCL', 'CUDA']:
             raise TraitError('Manually setting the precision is only '
                              'appropriate on the OpenCL and CUDA platforms')
-        if 'sysxml' in self.specified.config_traits:
+        if 'sysxml' in self.specified_config_traits:
             if any([i in self.specified_config_traits for i in ['ffxml', 'prmtop', 'protein', 'water']]):
                 raise TraitError('Since sysxml was specified, you should not specify ffxml / prmtop / protein / water.')
-        if 'prmtop' in self.specified.config_traits:
+        if 'prmtop' in self.specified_config_traits:
             if any([i in self.specified_config_traits for i in ['ffxml', 'protein', 'water']]):
                 raise TraitError('Since prmtop was specified, you should not specify ffxml / protein / water.')
         if self.coords.endswith('inpcrd'):
-            if 'prmtop' not in self.specified.config_traits:
+            if 'prmtop' not in self.specified_config_traits:
                 raise TraitError('You specified AMBER coordinates (inpcrd) which also requires a prmtop file.')
                 
     def load_coords(self):
@@ -194,9 +196,9 @@ class General(AppConfigurable):
             raise RuntimeError('Failed to load XML file: %s' % fn)
 
         xmlroot = tree.getroot()
-        if xmlroot.tag.lower() != 'system':
-            self.application.error('Tried to load %s as a system XML file, but the first tag is %s. '
-                                   'You may load force field XML files using the "ffxml" option'  % (fn, xmlroot.tag))
+        if not ('type' in xmlroot.attrib and xmlroot.attrib['type'].lower() == 'system'):
+            self.application.error('Tried to load %s as a system XML file, but the root must have attribute type="System"'
+                                   'You may load force field XML files using the "ffxml" option'  % (fn))
 
         for child in xmlroot:
             if 'amoeba' in child.tag.lower() and is_amoeba_ff == False:
@@ -674,9 +676,12 @@ class OpenMM(OpenMMApplication):
 
         # The option dictionary that gets passed to createSystem() is initialized.
         option_dict = OrderedDict([('nonbondedMethod',getattr(app, self.system.nb_method)),
-                                   ('nonbondedCutoff',self.system.cutoff),
                                    ('constraints',getattr(app, self.system.constraints)),
                                    ('rigidWater',self.system.rigid_water)])
+
+        # Set the nonbonded cutoff if we're using nonbonded cutoffs.
+        if self.system.nb_method in ['CutoffNonPeriodic', 'CutoffPeriodic', 'Ewald', 'PME']:
+            option_dict['nonbondedCutoff'] = self.system.cutoff
 
         # Set the dispersion correction if we have periodic boundary conditions.
         if self.system.nb_method in ['CutoffPeriodic', 'Ewald', 'PME']:
@@ -692,26 +697,30 @@ class OpenMM(OpenMMApplication):
                 option_dict['polar_eps'] = self.system.polar_eps
             elif 'polar_eps' in self.system.specified_config_traits:
                 self.error("The polar_eps option is used in mutual polarization only.")
+            # The logic here allows the user to override ewald_tol if they specify both aewald and pme_grid.
+            # However, if all three are specified, it errors out.
+            if any([i in self.system.specified_config_traits for i in ['aewald', 'pme_grid']]):
+                if not all([i in self.system.specified_config_traits for i in ['aewald', 'pme_grid']]):
+                    self.error("To use aewald/pme_grid with the AMOEBA force field, both options must be specified.")
+                else:
+                    self.system.aewald_pmegrid = True
+                    if 'ewald_tol' in self.system.specified_config_traits:
+                        self.error("You may specify either aewald+pme_grid or ewald_tol, but you cannot specify all three.")
         else:
             # Crash if the user specifies AMOEBA options without the AMOEBA force field.
             for i in ['aewald', 'pme_grid', 'vdw_cutoff', 'polarization', 'polar_eps']:
                 if i in self.system.specified_config_traits:
                     self.error("The %s option is only valid when using the AMOEBA polarizable force field.")
-        
-        # The logic here allows the user to override ewald_tol if they specify both aewald and pme_grid.
-        # However, if all three are specified, it errors out.
-        if any([i in self.system.specified_config_traits for i in ['aewald', 'pme_grid']]):
-            if not all([i in self.system.specified_config_traits for i in ['aewald', 'pme_grid']]):
-                self.error("To use aewald/pme_grid with the AMOEBA force field, both options must be specified.")
+
+        if self.system.nb_method in ['Ewald', 'PME']:
+            if self.system.is_amoeba_ff:
+                if not self.system.aewald_pmegrid:
+                    option_dict['ewaldErrorTolerance'] = self.system.ewald_tol
+                else:
+                    option_dict['pmeGridDimensions'] = [int(i) for i in self.system.pme_grid]
+                    option_dict['aEwald'] = self.system.aewald
             else:
-                self.system.aewald_pmegrid = True
-                if 'ewald_tol' in self.system.specified_config_traits:
-                    self.error("You may specify either aewald+pme_grid or ewald_tol, but you cannot specify all three.")
-        if not self.system.aewald_pmegrid:
-            option_dict['ewaldErrorTolerance'] = self.system.ewald_tol
-        else:
-            option_dict['pmeGridDimensions'] = [int(i) for i in self.system.pme_grid]
-            option_dict['aEwald'] = self.system.aewald
+                option_dict['ewaldErrorTolerance'] = self.system.ewald_tol
 
         return option_dict
         
@@ -724,7 +733,7 @@ class OpenMM(OpenMMApplication):
         if 'sysxml' in self.general.specified_config_traits:
             self.system.from_sysxml = True
             self.dynamics.from_sysxml = True 
-            system = self.get_system_from_sysxml()
+            system = self.general.get_system_from_sysxml()
             
         else:
             # Set up the system from AMBER prmtop file.
@@ -732,7 +741,7 @@ class OpenMM(OpenMMApplication):
                 prmtop = self.general.get_prmtop()
                 
             # Set up the system from force field XML files.
-            elif len(self.ffxml) > 0:
+            elif len(self.general.ffxml) > 0 or any(i in self.general.specified_config_traits for i in ['protein', 'water']) :
                 forcefield, self.system.is_amoeba_ff = self.general.get_forcefield()
 
             # Perform a second validation step and generate options for setting up the system.
@@ -750,6 +759,14 @@ class OpenMM(OpenMMApplication):
 
         self.print_config()
         self.generate_config_file()
+
+        # Set up the system from system XML file.
+        if 'serialize' in self.general.specified_config_traits:
+            self.script("serial = mm.XmlSerializer.serializeSystem(system)")
+            serial = mm.XmlSerializer.serializeSystem(system)
+            backup_file(self.general.serialize, self.log)
+            self.script("with open(%s, 'w') as f: f.write(serial)" % self.general.serialize)
+            with open(self.general.serialize, 'w') as f: f.write(serial)
 
         integrator = self.dynamics.get_integrator()
         platform = self.general.get_platform()
@@ -881,7 +898,7 @@ class OpenMM(OpenMMApplication):
             for traitname in kls.active_config_traits():
                 trait = getattr(kls, traitname)
                 if isinstance(trait, list):
-                    trait = ' '.join(trait)
+                    trait = ' '.join([str(i) for i in trait])
 
                 col1.append('%s = %s' % (traitname, trait))
                 if traitname in kls.specified_config_traits:
