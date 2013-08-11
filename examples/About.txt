@@ -1,3 +1,7 @@
+To run each of the example systems, go into the folder and run "sh
+command.sh".  Note that this requires the newest development build of OpenMM
+as of August 11, 2013.
+
 1) Example PDB with AMBER
 2) Example PDB with AMOEBA
 3) Example PDB with system XML
