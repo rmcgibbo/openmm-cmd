@@ -44,13 +44,13 @@ class General(AppConfigurable):
 
     protein = CaselessStrEnum(['amber96', 'amber99sb', 'amber99sb-ildn',
         'amber99sb-nmr', 'amber03', 'amber10', 'amoeba2009', 'None'], allow_none=None, config=True,
-        default_value='None', help=''' Forcefield to use for the protein atoms.
+        default_value='None', help=''' Force Field to use for the protein atoms.
         For details, consult the literature.''')
     water = CaselessStrEnum(['SPC/E', 'TIP3P', 'TIP4-Ew', 'TIP5P', 'Implicit', 'None'],
-        config=True, default_value='None', allow_none=True, help='''Forcefield
-        to use for water in the simulation.''')
-    ffxml = List(config=True, help='''Supply one or more custom forcefield files,
-        in the OpenMM XML format. This can be used to specify a forcefield for
+        config=True, default_value='None', allow_none=True, help='''Water model 
+        to use in the simulation.''')
+    ffxml = List(config=True, help='''Supply one or more custom force field files,
+        in the OpenMM XML format. This can be used to specify a force field for
         ligands, nonstandard amino acids, etc.''', nargs='+')
     sysxml = CBytes(config=True, help='''Supply one OpenMM system XML file, which
         comes from a serialized System object and provides a complete system.''')
@@ -66,6 +66,9 @@ class General(AppConfigurable):
     precision = CaselessStrEnum(['Single', 'Mixed', 'Double'], config=True,
         allow_none=False, default_value='Mixed', help='''Level of numeric
         precision to use for calculations.''')
+    device = CInt(config=True, help='''Supply the device index of the CUDA device
+        (i.e. NVidia GPU) or OpenCL device that you want to run on. Defaults to
+        the fastest device available.''')
     coords = CBytes(config=True, help='''OpenMM can take a pdb, which contains
         the coordinates and topology, or AMBER inpcrd, which contains coordinates.''')
 
@@ -88,6 +91,8 @@ class General(AppConfigurable):
         values = ['protein', 'water', 'platform', 'coords']
         if self.platform != 'Reference' and self.fastest_platform in ['CUDA', 'OpenCL']:
             values.append('precision')
+            if 'device' in self.specified_config_traits:
+                values.append('device') 
 
         if len(self.ffxml) > 0:
             values.append('ffxml')
@@ -97,6 +102,9 @@ class General(AppConfigurable):
         self.log.debug('Running general options validations.')
         if 'precision' in self.specified_config_traits and self.platform not in ['OpenCL', 'CUDA']:
             raise TraitError('Manually setting the precision is only '
+                             'appropriate on the OpenCL and CUDA platforms')
+        if 'device' in self.specified_config_traits and self.platform not in ['OpenCL', 'CUDA']:
+            raise TraitError('Manually setting the device is only '
                              'appropriate on the OpenCL and CUDA platforms')
         if 'sysxml' in self.specified_config_traits:
             if any([i in self.specified_config_traits for i in ['ffxml', 'prmtop', 'protein', 'water']]):
@@ -127,12 +135,12 @@ class General(AppConfigurable):
                                       'is implemented')
 
     def get_forcefield(self):
-        "Create the forcefield object"
+        "Create the force field object"
         files = [e for e in self.ffxml]  # copy
         if self.protein != 'None':
             files.append(self.protein.replace('-', '').lower() + '.xml')
         else:
-            self.log.warning('No builtin protein forcefield being used')
+            self.log.warning('No builtin protein force field being used')
 
 
         if self.water in ['SPC/E', 'TIP3P', 'TIP4-Ew', 'TIP5P']:
@@ -150,7 +158,7 @@ class General(AppConfigurable):
             elif self.protein == 'amoeba2009':
                 files.append('amoeba2009_gk.xml')
             else:
-                self.error("Without specifying the protein forcefield, I can't"
+                self.error("Without specifying the protein force field, I can't"
                            "unambiguously pick the implicit solvent parameters.")
         else:
             if self.protein != 'amoeba2009': # AMOEBA automatically includes a water model.
@@ -158,10 +166,10 @@ class General(AppConfigurable):
                              "like to specify a water model, use --water.")
 
         if len(files) == 0:
-            self.application.error('No forcefields were loaded. You can use OpenMM supplied '
-                                   'forcefields with the "protein" and "water" configurables '
+            self.application.error('No force fields were loaded. You can use OpenMM supplied '
+                                   'force fields with the "protein" and "water" configurables '
                                    '(--protein / --water flags on the command line), or supply '
-                                   'custom OpenMM XML forcefield files with the "ffxml" option')
+                                   'custom OpenMM XML force field files with the "ffxml" option')
 
         self.application.script('forcefield = app.ForceField(%s)' %
                ', '.join(["'%s'" % f for f in files]))
@@ -260,6 +268,12 @@ class General(AppConfigurable):
             pp = {'OpenCLPrecision': self.precision.lower()}
         else:
             raise RuntimeError('unknown platform')
+        
+        if 'device' in self.specified_config_traits:
+            if platform == 'CUDA':
+                pp['CudaDeviceIndex'] = str(self.device)
+            elif platform == 'OpenCL':
+                pp['OpenCLDeviceIndex'] = str(self.device)
 
         self.application.script('platformProperties = %s' % pp)
         return pp
@@ -298,7 +312,7 @@ class System(AppConfigurable):
     polarization = CaselessStrEnum(['direct', 'mutual'],
         default_value='mutual', allow_none=False, config=True, help='''Choose
         direct or mutual polarization for the AMOEBA polarizable force field.''')
-    polar_eps = CFloat(1e-6, allow_none=False, config=True, help='''Choose
+    polar_eps = CFloat(1e-5, allow_none=False, config=True, help='''Choose
         SCF tolerance for polarizable force field (e.g. AMOEBA with polarization mutual).''')
     disp_corr = CBool(True, config=True, help='''Apply an isotropic long-range
     correction for the vdW interactions.''')

@@ -1,1 +1,1 @@
-openmm --coords ice-water.pdb --ffxml iamoeba.xml --n_steps 20000 --barostat MonteCarloAnisotropic --platform CUDA --polarization direct --rigid_water False --dt 0.5*femtosecond | tee openmm.out
+openmm --coords ice-water.pdb --ffxml iamoeba.xml --n_steps 20000 --temp 261*kelvin --gen_temp 261*kelvin --barostat MonteCarloAnisotropic --platform CUDA --polarization direct --rigid_water False --dt 0.5*femtosecond | tee openmm.out

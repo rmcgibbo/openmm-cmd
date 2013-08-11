@@ -12,9 +12,9 @@
 >>> topology = pdb.topology
 >>> positions = pdb.positions
 >>> forcefield = app.ForceField('amoeba2009.xml')
->>> system = forcefield.createSystem(topology,nonbondedMethod=PME,nonbondedCutoff=1.
-... 0*nanometer,constraints=HBonds,rigidWater=True,useDispersionCorrection=True,pola
-... rization=mutual,polar_eps=1e-06,ewaldErrorTolerance=0.0005)
+>>> system = forcefield.createSystem(topology,nonbondedMethod=PME,constraints=HBonds
+... ,rigidWater=True,nonbondedCutoff=1.0*nanometer,useDispersionCorrection=True,pola
+... rization=mutual,polar_eps=1e-05,ewaldErrorTolerance=0.0005)
 ########################################################################
 # Option Summary. A more detailed config file is saved to config.out.ini
 ########################################################################
@@ -37,11 +37,11 @@ cutoff = 1.0*nanometer           # default value
 gen_temp = 300*kelvin            # default value
 vdw_cutoff = 1.0*nanometer       # default value
 polarization = mutual            # default value
-polar_eps = 1e-06                # default value
+polar_eps = 1e-05                # default value
 
 [Dynamics]                      
 integrator = Langevin            # default value
-dt = 2*femtosecond               # default value
+dt = 0.5*femtosecond             # your selection
 barostat = None                  # default value
 thermostat = None                # default value
 temp = 300*kelvin                # default value
@@ -50,7 +50,7 @@ collision_rate = 1.0/picosecond  # default value
 [Simulation]                    
 n_steps = 10000                  # default value
 restart_file = restart.p         # default value
-minimize = True                  # default value
+minimize = False                 # your selection
 restart_freq = 5000              # default value
 traj_file = output.dcd           # default value
 read_restart = False             # default value
@@ -58,12 +58,11 @@ progress_freq = 1000             # default value
 write_restart = True             # default value
 traj_freq = 1000                 # default value
 
->>> integrator = mm.LangevinIntegrator(300*kelvin, 1.0/picosecond, 2*femtosecond)
+>>> integrator = mm.LangevinIntegrator(300*kelvin, 1.0/picosecond, 0.5*femtosecond)
 >>> platform = mm.Platform.getPlatformByName('CUDA')
 >>> platformProperties = {'CudaPrecision': 'mixed'}
 >>> simulation = app.Simulation(topology, system, integrator, platform, properties)
 >>> simulation.context.setPositions(positions)
->>> simulation.minimizeEnergy()
 >>> simulation.context.setVelocitiesToTemperature()
 >>> simulation.reporters.append(ProgressReporter(sys.stdout, 1000, 10000))
 >>> simulation.reporters.append(DCDReporter(output.dcd, 1000))
@@ -71,16 +70,16 @@ traj_freq = 1000                 # default value
 >>> simulation.step(10000)
 
 
-Progress WallTime Left    Speed          Time            P.E.          K.E.      Total E.          Temp      Vol        Rho
-     (%)     (d:h:m:s) (ns/day)          (ps)        (kJ/mol)      (kJ/mol)      (kJ/mol)           (K)   (nm^3)     (g/mL)
-  0.000%            ??     0.00       0.00000   -157486.42163   22665.51662 -134820.90501     302.52268    87.87     1.0185
- 10.000%         1:10:     0.37       2.00000   -133923.74035   20108.62234 -113815.11802     268.39513    87.87     1.0185
- 20.000%         1:02:     0.37       4.00000   -130918.39313   21857.59935 -109060.79378     291.73919    87.87     1.0185
- 30.000%         54:27     0.37       6.00000   -129904.10730   22394.31786 -107509.78944     298.90291    87.87     1.0185
- 40.000%         46:39     0.37       8.00000   -129722.60776   22532.78291 -107189.82485     300.75104    87.87     1.0185
- 50.000%         38:52     0.37      10.00000   -129156.30176   22682.23975 -106474.06200     302.74588    87.87     1.0185
- 60.000%         31:05     0.37      12.00000   -129357.97712   22982.31687 -106375.66024     306.75109    87.87     1.0185
- 70.000%         23:19     0.37      14.00000   -128909.87065   22379.15844 -106530.71222     298.70058    87.87     1.0185
- 80.000%         15:32     0.37      16.00000   -129902.58125   22702.33175 -107200.24950     303.01406    87.87     1.0185
- 90.000%          7:46     0.37      18.00000   -129492.52127   22435.10037 -107057.42090     299.44725    87.87     1.0185
-100.000%          0:00     0.37      20.00000   -129474.72006   22356.02341 -107118.69665     298.39179    87.87     1.0185
+Progress   WallTime Left      Speed          Time            P.E.            K.E.        Total E.          Temp        Vol        Rho
+     (%)       (d:h:m:s)   (ns/day)          (ps)        (kJ/mol)        (kJ/mol)        (kJ/mol)           (K)     (nm^3)     (g/mL)
+  0.000%              ??       0.00       0.00000   -106066.47449     22128.13561    -83938.33888     295.35011    87.8659     1.0185
+ 10.000%           10:04       0.64       0.50000   -120502.50416     25077.88945    -95424.61471     334.72126    87.8659     1.0185
+ 20.000%            8:30       0.68       1.00000   -122108.77013     24613.34379    -97495.42635     328.52084    87.8659     1.0185
+ 30.000%            7:17       0.69       1.50000   -123467.47077     24138.10067    -99329.37010     322.17765    87.8659     1.0185
+ 40.000%            6:13       0.69       2.00000   -125057.59715     23972.47770   -101085.11945     319.96703    87.8659     1.0185
+ 50.000%            5:09       0.70       2.50000   -125845.64216     24094.81659   -101750.82557     321.59992    87.8659     1.0185
+ 60.000%            4:06       0.70       3.00000   -126309.83369     23380.62022   -102929.21347     312.06735    87.8659     1.0185
+ 70.000%            3:04       0.70       3.50000   -127000.92311     23200.77139   -103800.15172     309.66686    87.8659     1.0185
+ 80.000%            2:02       0.70       4.00000   -127385.08905     23299.15338   -104085.93567     310.97999    87.8659     1.0185
+ 90.000%            1:01       0.71       4.50000   -128088.13205     23316.72979   -104771.40226     311.21459    87.8659     1.0185
+100.000%            0:00       0.71       5.00000   -128196.67053     22777.09639   -105419.57413     304.01196    87.8659     1.0185
