@@ -5,7 +5,6 @@
 import os
 import tempfile
 import shutil
-import cPickle as pickle
 import json
 
 # openmm
@@ -183,8 +182,7 @@ class RestartReporter(object):
                         'time': time,
                         'step': step,
                         'parameters': parameters}
-                pickle.dump(data, f, pickle.HIGHEST_PROTOCOL)
-                # json.dump(data, f)
+                json.dump(data, f)
         except:
             if backup is not None:
                 shutil.copy(backup, self._fileName)
@@ -211,8 +209,7 @@ def loadRestartFile(simulation, fileName, isLeapFrog=NotSpecified):
       determination automatically.
     """
     with open(fileName, 'rb') as f:
-        data = pickle.load(f)
-        # data = json.load(f)
+        data = json.load(f)
 
     if 'version' not in data or data['version'] != RESTART_FORMAT_VERSION:
         raise ValueError("I don't know how to read this restart file.")
