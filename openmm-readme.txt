@@ -10,8 +10,9 @@ To get help on all available options, run "openmm --help-all".
 
 You need to provide coordinates and specify a force field.
 Coordinates may come from a .pdb file.  Built-in protein force fields
-and water models are shown in the help text.  Alternatively, you may
-provide AMBER inpcrd/prmtop files.
+and water models are shown in the help text, and you may add your own
+OpenMM force field XML files.  Alternatively, you may provide AMBER
+inpcrd/prmtop files.
 
 You may provide simulation options through the command line; all
 options are given in the help text.  Every time this program executes,
