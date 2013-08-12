@@ -34,7 +34,8 @@ specifying options with physical units.
 
 4) Suggestions are provided for typos on the command line.
 
-5) Restart files that conserve energy from the previous run.
+5) Restart files that contain state information (coordinates,
+velocities, and unit cell vectors) from the previous run.
 
 This program is provided as an option for users to use OpenMM without
 needing to write a Python script.  To take advantage of the full
