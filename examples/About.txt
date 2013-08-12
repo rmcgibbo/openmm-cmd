@@ -10,4 +10,5 @@ as of August 11, 2013.
 6) Acetophenone in AMOEBA water with system XML
 7) DHFR in explicit solvent
 8) DHFR in implicit solvent
-9) iAMOEBA ice-water interface with anisotropic barostat
+9) iAMOEBA ice-water interface with anisotropic barostat (requires latest OpenMM development version)
+10) Cox2 protein in implicit solvent, taken from AMBER examples.

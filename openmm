@@ -58,6 +58,8 @@ class General(AppConfigurable):
         can read using the "sysxml" option.''')
     prmtop = CBytes(config=True, help='''Supply one AMBER prmtop file, which provides
         a complete topology and system.''')
+    gmxtop = CBytes(config=True, help='''Supply one GROMACS .top file, which provides
+        a complete topology and system.''')
     platform = CaselessStrEnum(['Reference', 'OpenCL', 'CUDA', 'NotSpecified'],
         default_value='NotSpecified', allow_none=False, help='''OpenMM runs
         simulations on three platforms: Reference, CUDA, and OpenCL. If not
@@ -74,7 +76,10 @@ class General(AppConfigurable):
 
     # nonconfigurable traits
     pdb_file = Instance(app.PDBFile)
+    gro_file = Instance(app.GromacsGroFile)
     inpcrd_file = Instance(app.AmberInpcrdFile)
+    prmtop_file = Instance(app.AmberPrmtopFile)
+    gmxtop_file = Instance(app.GromacsTopFile)
     fastest_platform = CBytes(help='The name of the fastest platform on the system')
     def _fastest_platform_default(self):
         fastest, speed = -1, -1
@@ -107,14 +112,20 @@ class General(AppConfigurable):
             raise TraitError('Manually setting the device is only '
                              'appropriate on the OpenCL and CUDA platforms')
         if 'sysxml' in self.specified_config_traits:
-            if any([i in self.specified_config_traits for i in ['ffxml', 'prmtop', 'protein', 'water']]):
-                raise TraitError('Since sysxml was specified, you should not specify ffxml / prmtop / protein / water.')
+            if any([i in self.specified_config_traits for i in ['ffxml', 'prmtop', 'gmxtop', 'protein', 'water']]):
+                raise TraitError('Since sysxml was specified, you should not specify ffxml / prmtop / gmxtop / protein / water.')
         if 'prmtop' in self.specified_config_traits:
+            if any([i in self.specified_config_traits for i in ['ffxml', 'gmxtop', 'protein', 'water']]):
+                raise TraitError('Since prmtop was specified, you should not specify any xml / gmxtop / protein / water.')
+        if 'gmxtop' in self.specified_config_traits:
             if any([i in self.specified_config_traits for i in ['ffxml', 'protein', 'water']]):
-                raise TraitError('Since prmtop was specified, you should not specify ffxml / protein / water.')
+                raise TraitError('Since gmxtop was specified, you should not specify any xml / prmtop / protein / water.')
         if self.coords.endswith('inpcrd'):
-            if 'prmtop' not in self.specified_config_traits:
-                raise TraitError('You specified AMBER coordinates (inpcrd) which also requires a prmtop file.')
+            if 'prmtop' not in self.specified_config_traits and 'gmxtop' not in self.specified_config_traits:
+                raise TraitError('You specified AMBER coordinates (.inpcrd) which also requires a prmtop or gmxtop file.')
+        if self.coords.endswith('gro'):
+            if 'prmtop' not in self.specified_config_traits and 'gmxtop' not in self.specified_config_traits:
+                raise TraitError('You specified GROMACS coordinates (.gro) which also requires a prmtop or gmxtop file.')
                 
     def load_coords(self):
         "Load coordinate/topology files from disk"
@@ -122,6 +133,10 @@ class General(AppConfigurable):
             if self.pdb_file is None:
                 self.application.script("pdb = app.PDBFile('%s')" % self.coords)
                 self.pdb_file = app.PDBFile(self.coords)
+        elif self.coords.endswith('.gro'):
+            if self.gro_file is None:
+                self.application.script("gro = app.GromacsGroFile('%s')" % self.coords)
+                self.gro_file = app.GromacsGroFile(self.coords)
         elif self.coords.endswith('.inpcrd'):
             if self.inpcrd_file is None:
                 self.application.script("inpcrd = app.AmberInpcrdFile('%s')" % self.coords)
@@ -131,9 +146,24 @@ class General(AppConfigurable):
                                    'configuration file or on the command line using, '
                                    'for example, --coords protein.pdb or --coords protein.inpcrd')
         else:
-            raise NotImplementedError('Currently,only reading from pdb and inpcrd files '
+            raise NotImplementedError('Currently,only reading from .pdb, .gro, and .inpcrd files '
                                       'is implemented')
-
+        if 'prmtop' in self.specified_config_traits:
+            if self.prmtop_file is None:
+                self.application.script("prmtop = app.AmberPrmtopFile('%s')" % self.prmtop)
+                self.prmtop_file = app.AmberPrmtopFile(self.prmtop)
+        elif 'gmxtop' in self.specified_config_traits:
+            if self.gmxtop_file is None:
+                if self.pdb_file is not None:
+                    self.application.script("gmxtop = app.GromacsTopFile('%s', unitCellDimensions=pdb.topology.getUnitCellDimensions())" % self.gmxtop)
+                    self.gmxtop_file = app.GromacsTopFile(self.gmxtop, unitCellDimensions = self.pdb_file.topology.getUnitCellDimensions())
+                elif self.gro_file is not None:
+                    self.application.script("gmxtop = app.GromacsTopFile('%s', unitCellDimensions=gro.topology.getUnitCellDimensions())" % self.gmxtop)
+                    self.gmxtop_file = app.GromacsTopFile(self.gmxtop, unitCellDimensions = self.gro_file.getUnitCellDimensions())
+                else:
+                    self.application.script("gmxtop = app.GromacsTopFile('%s')" % self.gmxtop)
+                    self.gmxtop_file = app.GromacsTopFile(self.gmxtop)
+            
     def get_forcefield(self):
         "Create the force field object"
         files = [e for e in self.ffxml]  # copy
@@ -218,9 +248,6 @@ class General(AppConfigurable):
 
         return system
 
-    def get_prmtop(self):
-        return app.AmberPrmtopFile(self.prmtop)
-
     def get_positions(self):
         "Get the positions for every atom"
 
@@ -228,7 +255,14 @@ class General(AppConfigurable):
         if self.pdb_file is not None:
             self.application.script('positions = pdb.positions')
             return self.pdb_file.positions
-        raise RuntimeError('only loading pdbs currently supported')
+        elif self.gro_file is not None:
+            self.application.script('positions = gro.positions')
+            return self.gro_file.positions
+        elif self.inpcrd_file is not None:
+            self.application.script('positions = inpcrd.positions')
+            return self.inpcrd_file.positions
+            
+        raise RuntimeError('Only .pdb, .inpcrd, and .gro files are currently supported for reading coordinates.')
 
     def get_topology(self):
         "Get the system topology"
@@ -237,7 +271,25 @@ class General(AppConfigurable):
         if self.pdb_file is not None:
             self.application.script('topology = pdb.topology')
             return self.pdb_file.topology
-        raise RuntimeError('only loading from pdbs currently supported')
+        elif self.prmtop_file is not None:
+            self.application.script('topology = prmtop.topology')
+            return self.prmtop_file.topology
+        elif self.gmxtop_file is not None:
+            self.application.script('topology = gmxtop.topology')
+            return self.gmxtop_file.topology
+        raise RuntimeError('Only .pdb, .prmtop, or Gromacs .top files are currently supported for reading the topology.')
+
+    def get_unitcell(self):
+        "Get the unit cell dimensions"
+
+        self.load_coords()
+        if self.pdb_file is not None:
+            self.application.script('unitcell = pdb.getUnitCellDimensions()')
+            return self.pdb_file.topology.getUnitCellDimensions()
+        elif self.gro_file is not None:
+            self.application.script('unitcell = gro.getUnitCellDimensions()')
+            return self.gro_file.getUnitCellDimensions()
+        raise RuntimeError('Only .pdb and .gro files are currently supported for reading the unit cell.')
 
     def get_platform(self):
         "Get the platform"
@@ -325,6 +377,10 @@ class System(AppConfigurable):
     is_amoeba_ff = CBool(False, config=False, help='''This flag is set after 
         the force field is read in, and signifies whether we have an AMOEBA
         force field.''')
+    is_prmtop = CBool(False, config=False, help='''This flag is set after 
+        the Amber .prmtop file is read in.''')
+    is_gmxtop = CBool(False, config=False, help='''This flag is set after 
+        the Gromacs .top file is read in.''')
     aewald_pmegrid = CBool(False, config=False, help='''This flag is set after 
         the force field is read in, and signifies whether we are specifying PME
         using "aewald + pme_grid" rather than "ewald_tol" for the AMOEBA force field.''')
@@ -338,7 +394,7 @@ class System(AppConfigurable):
         """
         active_traits = ['nb_method', 'constraints', 'rigid_water', 'rand_vels']
 
-        if self.nb_method in ['CutoffPeriodic', 'PME', 'Ewald']:
+        if self.nb_method in ['CutoffPeriodic', 'PME', 'Ewald'] and not self.is_prmtop and not self.is_gmxtop:
             active_traits.append('disp_corr')
 
         if self.nb_method in ['PME', 'Ewald']:
@@ -698,7 +754,7 @@ class OpenMM(OpenMMApplication):
             option_dict['nonbondedCutoff'] = self.system.cutoff
 
         # Set the dispersion correction if we have periodic boundary conditions.
-        if self.system.nb_method in ['CutoffPeriodic', 'Ewald', 'PME']:
+        if self.system.nb_method in ['CutoffPeriodic', 'Ewald', 'PME'] and not self.system.is_prmtop and not self.system.is_gmxtop:
             option_dict['useDispersionCorrection'] = self.system.disp_corr
 
         if self.system.is_amoeba_ff:
@@ -752,8 +808,13 @@ class OpenMM(OpenMMApplication):
         else:
             # Set up the system from AMBER prmtop file.
             if 'prmtop' in self.general.specified_config_traits:
-                prmtop = self.general.get_prmtop()
-                
+                prmtop = self.general.prmtop_file
+                self.system.is_prmtop = True
+
+            elif 'gmxtop' in self.general.specified_config_traits:
+                gmxtop = self.general.gmxtop_file
+                self.system.is_gmxtop = True
+
             # Set up the system from force field XML files.
             elif len(self.general.ffxml) > 0 or any(i in self.general.specified_config_traits for i in ['protein', 'water']) :
                 forcefield, self.system.is_amoeba_ff = self.general.get_forcefield()
@@ -765,9 +826,22 @@ class OpenMM(OpenMMApplication):
             print_options = OrderedDict([(i, j) for i, j in system_options.items()])
             print_options['nonbondedMethod'] = self.system.nb_method
             print_options['constraints'] = self.system.constraints
-            self.script('system = forcefield.createSystem(topology,' 
-                        + ','.join(["%s=%s" % (key,val) for key, val in print_options.items()])+')')
-            system = forcefield.createSystem(topology, **system_options)
+
+            # Create the system object.
+            if 'prmtop' in self.general.specified_config_traits:
+                self.script('system = prmtop.createSystem('
+                            + ','.join(["%s=%s" % (key,val) for key, val in print_options.items()])+')')
+                system = prmtop.createSystem(**system_options)
+            elif 'gmxtop' in self.general.specified_config_traits:
+                self.script('system = gmxtop.createSystem('
+                            + ','.join(["%s=%s" % (key,val) for key, val in print_options.items()])+')')
+                system = gmxtop.createSystem(**system_options)
+            else:
+                self.script('system = forcefield.createSystem(topology,' 
+                            + ','.join(["%s=%s" % (key,val) for key, val in print_options.items()])+')')
+                system = forcefield.createSystem(topology, **system_options)
+
+            # Add thermostat and barostat forces.
             for force in self.dynamics.get_forces():
                 system.addForce(force)
 

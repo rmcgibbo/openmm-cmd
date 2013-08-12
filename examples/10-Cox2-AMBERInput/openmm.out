@@ -1,0 +1,80 @@
+
+>>> ###################################################################
+>>> # To use this script, paste all of the lines starting with the
+>>> # three less than signs (>>>) into a python interpreter.
+>>> ###################################################################
+>>> 
+>>> from simtk.unit import *
+>>> from simtk import openmm as mm
+>>> from simtk.openmm import app
+>>> 
+>>> inpcrd = app.AmberInpcrdFile('cox2.inpcrd')
+>>> prmtop = app.AmberPrmtopFile('cox2.prmtop')
+>>> topology = prmtop.topology
+>>> positions = inpcrd.positions
+>>> system = prmtop.createSystem(nonbondedMethod=CutoffNonPeriodic,constraints=HBond
+... s,rigidWater=True,nonbondedCutoff=1.0*nanometer)
+########################################################################
+# Option Summary. A more detailed config file is saved to config.out.ini
+########################################################################
+
+[General]                       
+protein = None                   # default value
+water = None                     # default value
+platform = CUDA                  # your selection
+coords = cox2.inpcrd             # your selection
+precision = Mixed                # default value
+
+[System]                        
+nb_method = CutoffNonPeriodic    # your selection
+constraints = HBonds             # default value
+rigid_water = True               # default value
+rand_vels = True                 # default value
+cutoff = 1.0*nanometer           # default value
+gen_temp = 300*kelvin            # default value
+
+[Dynamics]                      
+integrator = Langevin            # default value
+dt = 2*femtosecond               # default value
+barostat = None                  # default value
+thermostat = None                # default value
+temp = 300*kelvin                # default value
+collision_rate = 1.0/picosecond  # default value
+
+[Simulation]                    
+n_steps = 10000                  # default value
+restart_file = restart.p         # default value
+minimize = True                  # default value
+restart_freq = 5000              # default value
+traj_file = output.dcd           # default value
+read_restart = False             # default value
+progress_freq = 1000             # default value
+write_restart = True             # default value
+traj_freq = 1000                 # default value
+
+>>> integrator = mm.LangevinIntegrator(300*kelvin, 1.0/picosecond, 2*femtosecond)
+>>> platform = mm.Platform.getPlatformByName('CUDA')
+>>> platformProperties = {'CudaPrecision': 'mixed'}
+>>> simulation = app.Simulation(topology, system, integrator, platform, properties)
+>>> simulation.context.setPositions(positions)
+>>> simulation.minimizeEnergy()
+>>> simulation.context.setVelocitiesToTemperature()
+>>> simulation.reporters.append(ProgressReporter(sys.stdout, 1000, 10000))
+>>> simulation.reporters.append(DCDReporter(output.dcd, 1000))
+>>> simulation.reporters.append(RestartReporter(restart.p, 5000))
+>>> simulation.step(10000)
+
+
+Progress   WallTime Left      Speed          Time            P.E.            K.E.        Total E.          Temp
+     (%)       (d:h:m:s)   (ns/day)          (ps)        (kJ/mol)        (kJ/mol)        (kJ/mol)           (K)
+  0.000%              ??       0.00       0.00000      7312.62977     56503.12102     63815.75079     300.42463
+ 10.000%            0:35      43.91       2.00000     62969.62860     52872.86976    115842.49836     281.12274
+ 20.000%            0:22      60.74       4.00000     65167.24290     56034.58379    121201.82669     297.93344
+ 30.000%            0:17      69.76       6.00000     65873.75090     56700.74487    122574.49576     301.47539
+ 40.000%            0:13      75.05       8.00000     65437.09555     56064.17637    121501.27192     298.09078
+ 50.000%            0:10      79.38      10.00000     65741.22007     56447.98435    122189.20442     300.13147
+ 60.000%            0:09      71.11      12.00000     64564.36014     56289.72330    120854.08343     299.29001
+ 70.000%            0:07      73.55      14.00000     64762.18719     57043.01987    121805.20706     303.29525
+ 80.000%            0:04      76.61      16.00000     65400.07143     56125.30340    121525.37483     298.41579
+ 90.000%            0:02      78.78      18.00000     64851.20810     56286.55575    121137.76386     299.27316
+100.000%            0:00      80.21      20.00000     65186.54825     56423.35105    121609.89929     300.00050
