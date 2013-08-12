@@ -49,7 +49,7 @@ collision_rate = 1.0/picosecond  # default value
 
 [Simulation]                    
 n_steps = 10000                  # default value
-restart_file = restart.p         # default value
+restart_file = restart.json      # default value
 minimize = False                 # your selection
 restart_freq = 5000              # default value
 traj_file = output.dcd           # default value
@@ -62,24 +62,3 @@ traj_freq = 1000                 # default value
 >>> platform = mm.Platform.getPlatformByName('CUDA')
 >>> platformProperties = {'CudaPrecision': 'mixed'}
 >>> simulation = app.Simulation(topology, system, integrator, platform, properties)
->>> simulation.context.setPositions(positions)
->>> simulation.context.setVelocitiesToTemperature()
->>> simulation.reporters.append(ProgressReporter(sys.stdout, 1000, 10000))
->>> simulation.reporters.append(DCDReporter(output.dcd, 1000))
->>> simulation.reporters.append(RestartReporter(restart.p, 5000))
->>> simulation.step(10000)
-
-
-Progress   WallTime Left      Speed          Time            P.E.            K.E.        Total E.          Temp        Vol        Rho
-     (%)       (d:h:m:s)   (ns/day)          (ps)        (kJ/mol)        (kJ/mol)        (kJ/mol)           (K)     (nm^3)     (g/mL)
-  0.000%              ??       0.00       0.00000   -106066.47449     22128.13561    -83938.33888     295.35011    87.8659     1.0185
- 10.000%           10:04       0.64       0.50000   -120502.50416     25077.88945    -95424.61471     334.72126    87.8659     1.0185
- 20.000%            8:30       0.68       1.00000   -122108.77013     24613.34379    -97495.42635     328.52084    87.8659     1.0185
- 30.000%            7:17       0.69       1.50000   -123467.47077     24138.10067    -99329.37010     322.17765    87.8659     1.0185
- 40.000%            6:13       0.69       2.00000   -125057.59715     23972.47770   -101085.11945     319.96703    87.8659     1.0185
- 50.000%            5:09       0.70       2.50000   -125845.64216     24094.81659   -101750.82557     321.59992    87.8659     1.0185
- 60.000%            4:06       0.70       3.00000   -126309.83369     23380.62022   -102929.21347     312.06735    87.8659     1.0185
- 70.000%            3:04       0.70       3.50000   -127000.92311     23200.77139   -103800.15172     309.66686    87.8659     1.0185
- 80.000%            2:02       0.70       4.00000   -127385.08905     23299.15338   -104085.93567     310.97999    87.8659     1.0185
- 90.000%            1:01       0.71       4.50000   -128088.13205     23316.72979   -104771.40226     311.21459    87.8659     1.0185
-100.000%            0:00       0.71       5.00000   -128196.67053     22777.09639   -105419.57413     304.01196    87.8659     1.0185
