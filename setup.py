@@ -15,7 +15,7 @@ Development Status :: 2 - alpha
 Intended Audience :: Science/Research
 """
 
-NAME                = 'openmm-cmd'
+NAME                = 'openmm'
 AUTHOR              = 'Lee-Ping Wang, Robert McGibbon'
 DESCRIPTION         = DOCLINES[0]
 LONG_DESCRIPTION    =  "\n".join(DOCLINES[2:])
