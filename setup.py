@@ -60,11 +60,12 @@ Intended Audience :: Science/Research
 
 NAME                = 'openmm'
 AUTHOR              = 'Lee-Ping Wang, Robert McGibbon'
+AUTHOR_EMAIL        = "rmcgibbo@gmail.com"
 DESCRIPTION         = DOCLINES[0]
 LONG_DESCRIPTION    =  "\n".join(DOCLINES[2:])
 LICENSE             = "BSD"
-URL                 = ''
-DOWNLOAD_URL        = ''
+URL                 = 'https://github.com/rmcgibbo/openmm-cmd'
+DOWNLOAD_URL        = 'https://github.com/rmcgibbo/openmm-cmd/releases'
 PLATFORMS           = ['Windows', 'Linux', 'Mac OS-X', 'Solaris']
 CLASSIFIERS         = filter(None, CLASSIFIERS.split('\n'))
 VERSION             = '0.1'
@@ -119,6 +120,7 @@ if __name__ == '__main__':
           packages=find_packages(),
           version=VERSION,
           author=AUTHOR,
+          author_email=AUTHOR_EMAIL,
           license=LICENSE,
           url=URL,
           download_url=DOWNLOAD_URL,
