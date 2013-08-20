@@ -832,14 +832,24 @@ class OpenMM(OpenMMApplication):
                 self.script('system = prmtop.createSystem('
                             + ','.join(["%s=%s" % (key,val) for key, val in print_options.items()])+')')
                 system = prmtop.createSystem(**system_options)
+
             elif 'gmxtop' in self.general.specified_config_traits:
                 self.script('system = gmxtop.createSystem('
                             + ','.join(["%s=%s" % (key,val) for key, val in print_options.items()])+')')
                 system = gmxtop.createSystem(**system_options)
-            else:
+
+            elif len(self.general.ffxml) > 0 or any(i in self.general.specified_config_traits for i in ['protein', 'water']) :
                 self.script('system = forcefield.createSystem(topology,' 
                             + ','.join(["%s=%s" % (key,val) for key, val in print_options.items()])+')')
                 system = forcefield.createSystem(topology, **system_options)
+
+            else:
+                self.error("You did not provide enough information to create "
+                           "the System object!  Valid options are:\n"
+                           "(1) Specify a protein force field and/or water model using "
+                           "--protein and --forcefield arguments\n"
+                           "(2) Specify a force field XML file using --ffxml argument\n"
+                           "(3) Specify a GROMACS or AMBER prmtop file using --gmxtop or --prmtop argument ")
 
             # Add thermostat and barostat forces.
             for force in self.dynamics.get_forces():
