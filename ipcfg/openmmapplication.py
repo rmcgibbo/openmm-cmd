@@ -171,14 +171,23 @@ class OpenMMApplication(SingletonConfigurable):
         # the command line options override the config file options
         if argv is None:
             argv = copy.copy(sys.argv)
-        config_flags = filter(lambda a: a.startswith('--config='), argv)
-        if len(config_flags) > 0:
-            self.config_file_path = config_flags[0].split('=')[1]
-            argv = [a for a in argv if a != config_flags[0]]
+
+        new_argv = []  # filtered version
+        arg_iter = iter(argv)
+        self.config_file_path = ''
+        for arg in arg_iter:
+            if arg.startswith('--config='):
+                self.config_file_path = arg.split('=')[1]
+            elif arg == '--config':
+                self.config_file_path = next(arg_iter)
+            else:
+                new_argv.append(arg)
+
+        argv = new_argv
 
         # if the user was using make_config or did not specify a path
         # to the config file, then don't error if no config file is found.
-        error_on_no_config_file = not (any(a == 'make_config' for a in sys.argv) or len(config_flags) == 0)
+        error_on_no_config_file = not (any(a == 'make_config' for a in sys.argv) or len(self.config_file_path) == 0)
         self.load_config_file(self.config_file_path, error_on_not_exists=error_on_no_config_file)
 
         self.parse_command_line(argv)
