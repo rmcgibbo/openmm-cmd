@@ -70,7 +70,7 @@ def computeShiftedVelocities(context, state, velocities, timeShift, leaveShifted
     if isinstance(timeShift, Quantity):
         timeShift = timeShift.value_in_unit(picosecond)
 
-    forces = state.getForces().value_in_unit(kilojoules_per_mole/nanometer)
+    forces = state.getForces().value_in_unit(kilojoules_per_mole / nanometer)
     shiftedVelocities = [None for i in range(numParticles)]
     for i in range(numParticles):
         if particleMasses[i] > 0:
@@ -165,31 +165,32 @@ class RestartReporter(object):
         step = simulation.currentStep
         parameters = state.getParameters()
 
-        if os.path.exists(self._fileName):
-            # backup the current restart file, so that if the saving of the
-            # new restart file crashes, we don't loose the old restart file.
-            backup = tempfile.mkstemp()[1]
-            shutil.copy(self._fileName, backup)
-        else:
-            backup = None
+        # Write the new restart file to a temporary file, then move
+        # it to the proper location
+        tmp_fd, tmp_fn = tempfile.mkstemp()
+
+        with open(tmp_fn, 'wb') as f:
+            data = {'version': RESTART_FORMAT_VERSION,
+                    'positions': positions,
+                    'boxVectors': boxVectors,
+                    'velocities': velocities,
+                    'time': time,
+                    'step': step,
+                    'parameters': parameters}
+            json.dump(data, f)
 
         try:
-            with open(self._fileName, 'wb') as f:
-                data = {'version': RESTART_FORMAT_VERSION,
-                        'positions': positions,
-                        'boxVectors': boxVectors,
-                        'velocities': velocities,
-                        'time': time,
-                        'step': step,
-                        'parameters': parameters}
-                json.dump(data, f)
-        except:
-            if backup is not None:
-                shutil.copy(backup, self._fileName)
-            raise
+            shutil.move(tmp_fn, self._fileName)
+        except OSError:
+            # Unix will overwrite the existing file silently if the user
+            # has permission. On windows, OSError will be raised
+            os.remove(self._fileName)
+            shutil.move(tmp_fn, self._fileName)
         finally:
-            if backup is not None:
-                os.unlink(backup)
+            os.close(tmp_fd)
+
+
+
 
 
 #-----------------------------------------------------------------------------
