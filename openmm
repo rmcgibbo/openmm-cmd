@@ -142,7 +142,7 @@ class General(AppConfigurable):
                 self.application.script("inpcrd = app.AmberInpcrdFile('%s')" % self.coords)
                 self.inpcrd_file = app.AmberInpcrdFile(self.coords)
         elif self.coords == '':
-            self.application.error('You must provide a coordinate file, either in the'
+            self.application.error('You must provide a coordinate file, either in the '
                                    'configuration file or on the command line using, '
                                    'for example, --coords protein.pdb or --coords protein.inpcrd')
         else:
