@@ -1,5 +1,7 @@
 """Load .ini config files in the IPython config system.
 """
+import ast
+
 try:
     import ConfigParser as configparser
 except ImportError:
@@ -42,6 +44,12 @@ class IniFileConfigLoader(FileConfigLoader):
             self.parser.readfp(f)
 
         for section in self.parser.sections():
-            self.config[section].update(Config(**dict(self.parser.items(section))))
+            items = {}
+            for key, value in self.parser.items(section):
+                try:
+                    value = ast.literal_eval(value)
+                except ValueError:
+                    pass
+                items[key] = value
 
-        
+            self.config[section].update(Config(items))

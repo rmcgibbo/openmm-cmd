@@ -43,7 +43,7 @@ class General(AppConfigurable):
     """
 
     protein = CaselessStrEnum(['amber96', 'amber99sb', 'amber99sb-ildn',
-        'amber99sb-nmr', 'amber03', 'amber10', 'amoeba2009', 'None'], allow_none=None, config=True,
+        'amber99sb-nmr', 'amber03', 'amber10', 'amoeba2009'], allow_none=True, config=True,
         default_value='None', help=''' Force Field to use for the protein atoms.
         For details, consult the literature.''')
     water = CaselessStrEnum(['SPC/E', 'TIP3P', 'TIP4-Ew', 'TIP5P', 'Implicit', 'None'],
@@ -167,7 +167,7 @@ class General(AppConfigurable):
     def get_forcefield(self):
         "Create the force field object"
         files = [e for e in self.ffxml]  # copy
-        if self.protein != 'None':
+        if self.protein not in ['None', None]:
             files.append(self.protein.replace('-', '').lower() + '.xml')
         else:
             self.log.warning('No builtin protein force field being used')
@@ -816,7 +816,7 @@ class OpenMM(OpenMMApplication):
                 self.system.is_gmxtop = True
 
             # Set up the system from force field XML files.
-            elif len(self.general.ffxml) > 0 or any(i in self.general.specified_config_traits for i in ['protein', 'water']) :
+            elif len(self.general.ffxml) > 0 or any(i in self.general.specified_config_traits for i in ['protein', 'water']):
                 forcefield, self.system.is_amoeba_ff = self.general.get_forcefield()
 
             # Perform a second validation step and generate options for setting up the system.
