@@ -46,7 +46,7 @@ class General(AppConfigurable):
         'amber99sb-nmr', 'amber03', 'amber10', 'amoeba2009'], allow_none=True, config=True,
         default_value='None', help=''' Force Field to use for the protein atoms.
         For details, consult the literature.''')
-    water = CaselessStrEnum(['SPC/E', 'TIP3P', 'TIP4-Ew', 'TIP5P', 'Implicit', 'None'],
+    water = CaselessStrEnum(['SPC/E', 'TIP3P', 'TIP4P-Ew', 'TIP5P', 'Implicit', 'None'],
         config=True, default_value='None', allow_none=True, help='''Water model 
         to use in the simulation.''')
     ffxml = List(config=True, help='''Supply one or more custom force field files,
@@ -173,7 +173,7 @@ class General(AppConfigurable):
             self.log.warning('No builtin protein force field being used')
 
 
-        if self.water in ['SPC/E', 'TIP3P', 'TIP4-Ew', 'TIP5P']:
+        if self.water in ['SPC/E', 'TIP3P', 'TIP4P-Ew', 'TIP5P']:
             files.append(
                 self.water.replace('/', '').replace('-', '').lower() + '.xml')
         elif self.water == 'Implicit':
