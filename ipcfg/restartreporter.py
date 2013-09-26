@@ -257,4 +257,5 @@ def loadRestartFile(simulation, fileName, isLeapFrog=NotSpecified):
 
     # set parameters
     for key, value in data['parameters'].iteritems():
+        key = key.encode('ascii', 'ignore')
         simulation.context.setParameter(key, value)
