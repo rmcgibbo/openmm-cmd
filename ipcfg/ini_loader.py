@@ -46,6 +46,15 @@ class IniFileConfigLoader(FileConfigLoader):
         for section in self.parser.sections():
             items = {}
             for key, value in self.parser.items(section):
+
+                # Filter out inline comments
+                pound_index = value.find('#')
+                if pound_index > -1:
+                    value = value[:pound_index]
+
+                # Filter any trailing whitespace
+                value = value.strip()
+
                 try:
                     value = ast.literal_eval(value)
                 except ValueError:
