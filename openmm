@@ -818,6 +818,10 @@ class OpenMM(OpenMMApplication):
             # Set up the system from force field XML files.
             elif len(self.general.ffxml) > 0 or any(i in self.general.specified_config_traits for i in ['protein', 'water']):
                 forcefield, self.system.is_amoeba_ff = self.general.get_forcefield()
+                modeller = app.Modeller(topology, positions)
+                modeller.addExtraParticles(forcefield)
+                topology = modeller.topology
+                positions = modeller.positions
 
             # Perform a second validation step and generate options for setting up the system.
             system_options = self.validate_system()
