@@ -928,10 +928,10 @@ class OpenMM(OpenMMApplication):
 
         # before exiting, write a restart file
         force_reporters(simulation, RestartReporter)
-        print '#=================================================#'
-        print '#| Congratulations, your simulation has finished |#'
-        print '#|      And if you don't know, now you know!     |#'
-        print '#=================================================#'
+        print "#=================================================#"
+        print "#| Congratulations, your simulation has finished |#"
+        print "#|      And if you don't know, now you know!     |#"
+        print "#=================================================#"
 
     def script(self, msg):
         if not self.show_script:
