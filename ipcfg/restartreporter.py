@@ -6,6 +6,7 @@ import os
 import tempfile
 import shutil
 import json
+import bz2
 
 # openmm
 import simtk.openmm as mm
@@ -25,6 +26,23 @@ class NotSpecified(object):
 NotSpecified = NotSpecified()
 
 RESTART_FORMAT_VERSION = 2.0
+
+# File signatures http://www.garykessler.net/library/file_sigs.html
+magic_dict = {
+    "\x1f\x8b\x08": "gz",
+    "\x42\x5a\x68": "bz2",
+    "\x50\x4b\x03\x04": "zip"
+    }
+
+max_len = max(len(x) for x in magic_dict)
+
+def file_type(filename):
+    with open(filename) as f:
+        file_start = f.read(max_len)
+    for magic, filetype in magic_dict.items():
+        if file_start.startswith(magic):
+            return filetype
+    return "no match"
 
 #-----------------------------------------------------------------------------
 # Utilities
@@ -169,7 +187,7 @@ class RestartReporter(object):
         # it to the proper location
         tmp_fd, tmp_fn = tempfile.mkstemp()
 
-        with open(tmp_fn, 'wb') as f:
+        with bz2.BZ2File(tmp_fn, 'w') as f:
             data = {'version': RESTART_FORMAT_VERSION,
                     'positions': positions,
                     'boxVectors': boxVectors,
@@ -209,8 +227,12 @@ def loadRestartFile(simulation, fileName, isLeapFrog=NotSpecified):
       If not specified, we will inspect the integrator and attempt to make that
       determination automatically.
     """
-    with open(fileName, 'rb') as f:
-        data = json.load(f)
+    if file_type(fileName) == 'bz2':
+        f = bz2.BZ2File(fileName)
+    else:
+        f = open(fileName, 'rb')
+    data = json.load(f)
+    f.close()
 
     if 'version' not in data or data['version'] != RESTART_FORMAT_VERSION:
         raise ValueError("I don't know how to read this restart file.")

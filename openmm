@@ -620,7 +620,7 @@ class Simulation(AppConfigurable):
         save the state to disk in the DCD format.''')
     progress_freq = CInt(1000, config=True, help='''Frequency, in steps,
         to print summary statistics on the state of the simulation.''')
-    restart_file = CBytes('restart.json', config=True, help='''Filename for
+    restart_file = CBytes('restart.json.bz2', config=True, help='''Filename for
         reading/writing the restart file.''')
     restart_freq = CInt(5000, config=True, help='''Frequency, in steps, to
         save the restart file.''')
