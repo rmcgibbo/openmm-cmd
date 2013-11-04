@@ -11,8 +11,12 @@ import shutil
 import logging
 import platform
 from datetime import datetime
-# Introduces Python 2.7 dependency, is this okay?
-from collections import OrderedDict
+try:
+    from collections import OrderedDict
+except ImportError:
+    # using ordereddict is just cosmetic, so on python2.6
+    # we can just use regular dict
+    OrdederedDict = dict
 
 # openmm
 from simtk import unit
