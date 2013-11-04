@@ -4,20 +4,30 @@
 #-----------------------------------------------------------------------------
 # Imports
 #-----------------------------------------------------------------------------
-
+from __future__ import print_function
 import os
 import sys
 import shutil
 import logging
 import platform
 from datetime import datetime
-# Introduces Python 2.7 dependency, is this okay?
-from collections import OrderedDict
+try:
+    from collections import OrderedDict
+except ImportError:
+    # using ordereddict is just cosmetic, so on python2.6
+    # we can just use regular dict
+    OrderedDict = dict
 
 # openmm
-from simtk import unit
-from simtk.openmm import app
-from simtk import openmm as mm
+try:
+    from simtk import unit
+    from simtk.openmm import app
+    from simtk import openmm as mm
+except ImportError as err:
+    print("Failed to import OpenMM packages:", str(err))
+    print("Make sure OpenMM is installed and the library path is set correctly.")
+    sys.exit(1)
+
 from ipcfg.progressreporter import ProgressReporter
 from ipcfg.restartreporter import RestartReporter, loadRestartFile
 from ipcfg.velocityverlet import VelocityVerletIntegrator
@@ -921,17 +931,17 @@ class OpenMM(OpenMMApplication):
         self.log.info('Selected Platform: %s', platform.getName())
         for key in platform.getPropertyNames():
             self.log.info('%s = %s', key, platform.getPropertyValue(simulation.context, key))
-        print ''
+        print('')
 
         force_reporters(simulation)
         simulation.step(self.simulation.n_steps)
 
         # before exiting, write a restart file
         force_reporters(simulation, RestartReporter)
-        print "#=================================================#"
-        print "#| Congratulations, your simulation has finished |#"
-        print "#|      And if you don't know, now you know!     |#"
-        print "#=================================================#"
+        print("#=================================================#")
+        print("#| Congratulations, your simulation has finished |#")
+        print("#|      And if you don't know, now you know!     |#")
+        print("#=================================================#")
 
     def script(self, msg):
         if not self.show_script:
@@ -958,10 +968,10 @@ class OpenMM(OpenMMApplication):
                 'from simtk.openmm import app',
                 ' ']
             print
-            print os.linesep.join(map(c, lines))
+            print(os.linesep.join(map(c, lines)))
             self._script_initialized = True
 
-        print c(msg)
+        print(c(msg))
 
     def generate_config_file(self):
         """Write a configuration file containing all of the active options
@@ -985,7 +995,7 @@ class OpenMM(OpenMMApplication):
 
         self.log.info('Writing config file to %s' % self.config_file_out)
         with open(self.config_file_out, 'w') as f:
-            print >> f, '\n'.join(lines)
+            print('\n'.join(lines), file=f)
 
 
     def print_config(self):
@@ -1016,9 +1026,9 @@ class OpenMM(OpenMMApplication):
 
         header = '# Option Summary. A more detailed config file is saved to %s' % self.config_file_out
         breaker = '#' * len(header)
-        print os.linesep.join([breaker, header, breaker])
-        print os.linesep.join(opt.ljust(width) + '  ' + comment for opt, comment in zip(col1, col2))
-        print ''
+        print(os.linesep.join([breaker, header, breaker]))
+        print(os.linesep.join(opt.ljust(width) + '  ' + comment for opt, comment in zip(col1, col2)))
+        print('')
 
 
 #----------------------------------------------------------------------------

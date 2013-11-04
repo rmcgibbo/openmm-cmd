@@ -187,7 +187,8 @@ class RestartReporter(object):
         # it to the proper location
         tmp_fd, tmp_fn = tempfile.mkstemp()
 
-        with bz2.BZ2File(tmp_fn, 'w') as f:
+        try:
+            f = bz2.BZ2File(tmp_fn, 'w')
             data = {'version': RESTART_FORMAT_VERSION,
                     'positions': positions,
                     'boxVectors': boxVectors,
@@ -196,6 +197,9 @@ class RestartReporter(object):
                     'step': step,
                     'parameters': parameters}
             json.dump(data, f)
+        finally:
+            f.close()
+
 
         try:
             shutil.move(tmp_fn, self._fileName)
