@@ -67,7 +67,7 @@ CFloat._displayname = 'Float'
 # Classes
 #-----------------------------------------------------------------------------
 
-class LevelFormatter(logging.Formatter):
+class LevelFormatter(logging.Formatter, object):
     """Formatter with additional `highlevel` record
 
     This field is empty if log level is less than highlevel_limit,
