@@ -91,6 +91,7 @@ class General(AppConfigurable):
     prmtop_file = Instance(app.AmberPrmtopFile)
     gmxtop_file = Instance(app.GromacsTopFile)
     fastest_platform = CBytes(help='The name of the fastest platform on the system')
+    xml_override = []
     def _fastest_platform_default(self):
         fastest, speed = -1, -1
         for i in range(mm.Platform.getNumPlatforms()):
@@ -112,10 +113,13 @@ class General(AppConfigurable):
         if len(self.ffxml) > 0:
             values.append('ffxml')
 
-        if 'sysxml' not in self.specified_config_traits:
-            values += ['protein', 'water']
-        else:
+        xmltraits = ['protein', 'water']
+
+        if 'sysxml' in self.specified_config_traits:
             values.append('sysxml')
+            self.xml_override = xmltraits
+        else:
+            values += xmltraits
 
         return values
 
@@ -406,41 +410,48 @@ class System(AppConfigurable):
     from_sysxml = CBool(False, config=False, help='''This flag is set if the system
         is obtained from a system XML file, which will override most user-provided options.''')
 
+    # nonconfigurable traits
+    xml_override = []
+
     def active_config_traits(self):
         """Construct a list of all of the configurable traits that are currently
         'active', in the sense that their value will have some effect on the
         simulation.
         """
-        active_traits = ['nb_method', 'constraints', 'rigid_water', 'rand_vels']
+        active_traits = []
+
+        # So named because the system XML has the ability to override these.
+        xmltraits = ['nb_method', 'constraints', 'rigid_water', 'rand_vels']
 
         if self.nb_method in ['CutoffPeriodic', 'PME', 'Ewald'] and not self.is_prmtop and not self.is_gmxtop:
-            active_traits.append('disp_corr')
+            xmltraits.append('disp_corr')
 
         if self.nb_method in ['PME', 'Ewald']:
-            active_traits.append('ewald_tol')
+            xmltraits.append('ewald_tol')
 
         if self.nb_method != 'NoCutoff':
-            active_traits.append('cutoff')
+            xmltraits.append('cutoff')
 
         if self.rand_vels:
-            active_traits.append('gen_temp')
+            xmltraits.append('gen_temp')
 
         if self.is_amoeba_ff:
             if self.aewald_pmegrid:
                 # LPW: I introduced this because the user should be able
                 # to specify aewald and pme_grid to override ewald_tol.
-                active_traits.remove('ewald_tol')
-                active_traits.append('aewald')
-                active_traits.append('pme_grid')
-            active_traits.append('vdw_cutoff')
-            active_traits.append('polarization')
+                xmltraits.remove('ewald_tol')
+                xmltraits.append('aewald')
+                xmltraits.append('pme_grid')
+            xmltraits.append('vdw_cutoff')
+            xmltraits.append('polarization')
             if self.polarization == 'mutual':
-                active_traits.append('polar_eps')
+                xmltraits.append('polar_eps')
 
-        # Throw all this out if we're using a system XML.
         if self.from_sysxml:
-            active_traits = []
-
+            self.xml_override = xmltraits
+        else:
+            active_traits = xmltraits
+            
         return active_traits
 
     def validate(self):
@@ -501,6 +512,9 @@ class Dynamics(AppConfigurable):
     from_sysxml = CBool(False, config=False, help='''This flag is set if the system
         is obtained from a system XML file, which will override most user-provided options.''')
 
+    # nonconfigurable traits
+    xml_override = []
+
     def active_config_traits(self):
         """Construct a list of all of the configurable traits that are currently
         'active', in the sense that their value will have some effect on the
@@ -508,29 +522,39 @@ class Dynamics(AppConfigurable):
         """
         active_traits = ['integrator']
 
+        # So named because the system XML has the ability to override these.
+        xmltraits = []
+
         if self.integrator in ['Langevin', 'Verlet', 'VelocityVerlet', 'Brownian']:
             active_traits.append('dt')
         else:
             active_traits.append('tolerance')
 
-        if not self.from_sysxml:
-            active_traits.append('barostat')
-            active_traits.append('thermostat')
+        xmltraits.append('barostat')
+        xmltraits.append('thermostat')
 
-            if self.barostat == 'MonteCarlo':
-                active_traits.append('pressure')
-                active_traits.append('barostat_interval')
+        if self.barostat == 'MonteCarlo':
+            xmltraits.append('pressure')
+            xmltraits.append('barostat_interval')
 
-            if self.barostat == 'MonteCarloAnisotropic':
-                active_traits.append('pressure3')
-                active_traits.append('barostat_interval')
-                active_traits.append('scalex')
-                active_traits.append('scaley')
-                active_traits.append('scalez')
+        if self.barostat == 'MonteCarloAnisotropic':
+            xmltraits.append('pressure3')
+            xmltraits.append('barostat_interval')
+            xmltraits.append('scalex')
+            xmltraits.append('scaley')
+            xmltraits.append('scalez')
 
-        if self.integrator in ['Langevin', 'VariableLangevin', 'Brownian'] or (not self.from_sysxml and self.thermostat == 'Andersen'):
+        if self.integrator in ['Langevin', 'VariableLangevin', 'Brownian']:
             active_traits.append('temp')
             active_traits.append('collision_rate')
+        elif self.thermostat == 'Andersen':
+            xmltraits.append('temp')
+            xmltraits.append('collision_rate')
+
+        if self.from_sysxml:
+            self.xml_override = xmltraits
+        else:
+            active_traits += xmltraits
 
         return active_traits
 

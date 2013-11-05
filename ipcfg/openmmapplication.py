@@ -424,6 +424,8 @@ class AppConfigurable(Configurable):
             if name in active_config_traits:
                 lines.append(item)
             else:
+                if name in self.xml_override:
+                    lines.append(c('NOTE: Deactivated because system is being loaded from an XML file.'))
                 lines.append(c(item))
             lines.append('')
         return '\n'.join(lines)
