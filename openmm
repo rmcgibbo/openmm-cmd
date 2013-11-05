@@ -70,9 +70,9 @@ class General(AppConfigurable):
         a complete topology and system.''')
     gmxtop = CBytes(config=True, help='''Supply one GROMACS .top file, which provides
         a complete topology and system.''')
-    platform = CaselessStrEnum(['Reference', 'OpenCL', 'CUDA', 'NotSpecified'],
+    platform = CaselessStrEnum(['Reference', 'OpenCL', 'CUDA', 'CPU', 'NotSpecified'],
         default_value='NotSpecified', allow_none=False, help='''OpenMM runs
-        simulations on three platforms: Reference, CUDA, and OpenCL. If not
+        simulations on four platforms: Reference, CUDA, CPU, and OpenCL. If not
         specified, the fastest available platform will be selected
         automatically.''', config=True)
     precision = CaselessStrEnum(['Single', 'Mixed', 'Double'], config=True,
@@ -323,6 +323,8 @@ class General(AppConfigurable):
             platform = self.platform
 
         if platform == 'Reference':
+            pp = None
+        elif platform == 'CPU':
             pp = None
         elif platform == 'CUDA':
             pp = {'CudaPrecision': self.precision.lower()}
@@ -986,7 +988,7 @@ class OpenMM(OpenMMApplication):
         lines = ['# Configuration file for openmm',
                  '# Generated on %s, %s' % (platform.node(), datetime.now()),
                  '# OpenMM version %s' % mm.Platform.getOpenMMVersion(),
-                 '# Invokation command line: %s' % ' '.join(sys.argv),
+                 '# Invocation command line: %s' % ' '.join(sys.argv),
                  '']
         lines.append(self.general.config_section())
         lines.append(self.system.config_section())
