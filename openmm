@@ -103,7 +103,7 @@ class General(AppConfigurable):
         return fastest
 
     def active_config_traits(self):
-        values = ['protein', 'water', 'platform', 'coords']
+        values = ['platform', 'coords']
         if self.platform != 'Reference' and self.fastest_platform in ['CUDA', 'OpenCL']:
             values.append('precision')
             if 'device' in self.specified_config_traits:
@@ -111,6 +111,12 @@ class General(AppConfigurable):
 
         if len(self.ffxml) > 0:
             values.append('ffxml')
+
+        if 'sysxml' not in self.specified_config_traits:
+            values += ['protein', 'water']
+        else:
+            values.append('sysxml')
+
         return values
 
     def validate(self):
@@ -306,6 +312,7 @@ class General(AppConfigurable):
 
         if self.platform is 'NotSpecified':
             platform = self.fastest_platform
+            self.platform = self.fastest_platform
         else:
             platform = self.platform
 
@@ -871,9 +878,6 @@ class OpenMM(OpenMMApplication):
             for force in self.dynamics.get_forces():
                 system.addForce(force)
 
-        self.print_config()
-        self.generate_config_file()
-
         # Set up the system from system XML file.
         if 'serialize' in self.general.specified_config_traits:
             self.script("serial = mm.XmlSerializer.serializeSystem(system)")
@@ -885,6 +889,9 @@ class OpenMM(OpenMMApplication):
         integrator = self.dynamics.get_integrator()
         platform = self.general.get_platform()
         properties = self.general.get_platform_properties()
+
+        self.print_config()
+        self.generate_config_file()
 
         self.script('simulation = app.Simulation(topology, system, integrator, platform, properties)')
         simulation = app.Simulation(topology, system, integrator, platform, properties)

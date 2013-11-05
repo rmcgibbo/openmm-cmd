@@ -412,8 +412,7 @@ class AppConfigurable(Configurable):
         lines.extend([breaker, ''])
 
         # all of the configurable traits that are currently activated
-        specified_config_traits = self.specified_config_traits
-        # active_config_traits = self.active_config_traits()
+        active_config_traits = self.active_config_traits()
 
         for name, trait in self.__class__.class_traits(config=True).iteritems():
             help = trait.get_metadata('help') or ''
@@ -422,7 +421,7 @@ class AppConfigurable(Configurable):
                 lines.append(c(indent('Choices: [%s]' % (', '.join(trait.values,)))))
 
             item = '%s = %s' % (name, getattr(self, name))
-            if name in specified_config_traits:
+            if name in active_config_traits:
                 lines.append(item)
             else:
                 lines.append(c(item))
