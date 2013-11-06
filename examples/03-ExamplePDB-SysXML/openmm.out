@@ -1,4 +1,3 @@
-
 >>> ###################################################################
 >>> # To use this script, paste all of the lines starting with the
 >>> # three less than signs (>>>) into a python interpreter.
@@ -12,16 +11,18 @@
 >>> topology = pdb.topology
 >>> positions = pdb.positions
 >>> system = XmlSerializer.deserializeSystem(open(system.xml).read())
+>>> integrator = mm.LangevinIntegrator(300*kelvin, 1.0/picosecond, 2*femtosecond)
+>>> platform = mm.Platform.getPlatformByName('CUDA')
+>>> platformProperties = {'CudaPrecision': 'mixed'}
 ########################################################################
 # Option Summary. A more detailed config file is saved to config.out.ini
 ########################################################################
 
 [General]                       
-protein = None                   # default value
-water = None                     # default value
-platform = NotSpecified          # default value
+platform = CUDA                  # default value
 coords = input.pdb               # your selection
 precision = Mixed                # default value
+sysxml = system.xml              # your selection
 
 [System]                        
 
@@ -33,7 +34,7 @@ collision_rate = 1.0/picosecond  # default value
 
 [Simulation]                    
 n_steps = 10000                  # default value
-restart_file = restart.json      # default value
+restart_file = restart.json.bz2  # default value
 minimize = True                  # default value
 restart_freq = 5000              # default value
 traj_file = output.dcd           # default value
@@ -42,29 +43,29 @@ progress_freq = 1000             # default value
 write_restart = True             # default value
 traj_freq = 1000                 # default value
 
->>> integrator = mm.LangevinIntegrator(300*kelvin, 1.0/picosecond, 2*femtosecond)
->>> platform = mm.Platform.getPlatformByName('CUDA')
->>> platformProperties = {'CudaPrecision': 'mixed'}
 >>> simulation = app.Simulation(topology, system, integrator, platform, properties)
 >>> simulation.context.setPositions(positions)
 >>> simulation.minimizeEnergy()
 >>> simulation.context.setVelocitiesToTemperature()
 >>> simulation.reporters.append(ProgressReporter(sys.stdout, 1000, 10000))
 >>> simulation.reporters.append(DCDReporter(output.dcd, 1000))
->>> simulation.reporters.append(RestartReporter(restart.json, 5000))
+>>> simulation.reporters.append(RestartReporter(restart.json.bz2, 5000))
 >>> simulation.step(10000)
-
 
 Progress   WallTime Left      Speed          Time            P.E.            K.E.        Total E.          Temp        Vol        Rho
      (%)       (d:h:m:s)   (ns/day)          (ps)        (kJ/mol)        (kJ/mol)        (kJ/mol)           (K)     (nm^3)     (g/mL)
-  0.000%              ??       0.00       0.00000   -145560.65817     22412.21563   -123148.44254     299.14180    87.8659     1.0185
- 10.000%            0:26      58.33       2.00000   -120867.80174     19893.09490   -100974.70685     265.51843    87.8659     1.0185
- 20.000%            0:21      63.89       4.00000   -117032.49395     21979.01316    -95053.48079     293.35973    87.8659     1.0185
- 30.000%            0:18      65.88       6.00000   -115666.00437     22228.54558    -93437.45879     296.69031    87.8659     1.0185
- 40.000%            0:15      66.94       8.00000   -115839.99698     22239.57070    -93600.42628     296.83746    87.8659     1.0185
- 50.000%            0:12      67.51      10.00000   -115602.50454     22849.94571    -92752.55884     304.98430    87.8659     1.0185
- 60.000%            0:10      65.67      12.00000   -114745.67532     22870.80458    -91874.87074     305.26271    87.8659     1.0185
- 70.000%            0:07      66.26      14.00000   -114822.00062     22752.57885    -92069.42178     303.68472    87.8659     1.0185
- 80.000%            0:05      66.67      16.00000   -114707.75113     22037.08743    -92670.66370     294.13486    87.8659     1.0185
- 90.000%            0:02      67.04      18.00000   -116063.91039     21927.97118    -94135.93921     292.67846    87.8659     1.0185
-100.000%            0:00      67.24      20.00000   -115371.71463     22070.28880    -93301.42583     294.57801    87.8659     1.0185
+  0.000%              ??       0.00       0.00000   -145973.18958     22666.04011   -123307.14947     302.52966    87.8659     1.0185
+ 10.000%            0:16      91.86       2.00000   -121064.68192     19827.97348   -101236.70845     264.64923    87.8659     1.0185
+ 20.000%            0:12     111.06       4.00000   -117968.50987     21843.63708    -96124.87279     291.55283    87.8659     1.0185
+ 30.000%            0:10     119.34       6.00000   -115758.19202     22241.65083    -93516.54120     296.86523    87.8659     1.0185
+ 40.000%            0:08     123.85       8.00000   -115993.75655     21967.31338    -94026.44317     293.20357    87.8659     1.0185
+ 50.000%            0:06     126.31      10.00000   -115671.23070     22231.36317    -93439.86753     296.72791    87.8659     1.0185
+ 60.000%            0:05     118.90      12.00000   -115767.52225     22453.98738    -93313.53487     299.69934    87.8659     1.0185
+ 70.000%            0:04     121.48      14.00000   -115424.27313     21941.93930    -93482.33383     292.86490    87.8659     1.0185
+ 80.000%            0:02     123.51      16.00000   -115636.14664     22096.70799    -93539.43865     294.93064    87.8659     1.0185
+ 90.000%            0:01     125.14      18.00000   -115023.76667     22209.21812    -92814.54855     296.43234    87.8659     1.0185
+100.000%            0:00     126.26      20.00000   -115015.64727     22214.13858    -92801.50869     296.49801    87.8659     1.0185
+#=================================================#
+#| Congratulations, your simulation has finished |#
+#|      And if you don't know, now you know!     |#
+#=================================================#

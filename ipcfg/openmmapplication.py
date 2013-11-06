@@ -411,7 +411,7 @@ class AppConfigurable(Configurable):
 
         lines.extend([breaker, ''])
 
-        # all of the configurable traits that are currently activayed
+        # all of the configurable traits that are currently activated
         active_config_traits = self.active_config_traits()
 
         for name, trait in self.__class__.class_traits(config=True).iteritems():
@@ -424,6 +424,8 @@ class AppConfigurable(Configurable):
             if name in active_config_traits:
                 lines.append(item)
             else:
+                if name in self.xml_override:
+                    lines.append(c('NOTE: Deactivated because system is being loaded from an XML file.'))
                 lines.append(c(item))
             lines.append('')
         return '\n'.join(lines)
