@@ -993,7 +993,7 @@ class OpenMM(OpenMMApplication):
             lines = [
                 '###################################################################',
                 '# To use this script, paste all of the lines starting with the',
-                '# three less than signs (>>>) into a python interpreter.',
+                '# three greater than signs (>>>) into a python interpreter.',
                 '###################################################################',
                 ' ',
                 'from simtk.unit import *',
