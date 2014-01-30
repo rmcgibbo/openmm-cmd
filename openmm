@@ -702,11 +702,11 @@ class OpenMM(OpenMMApplication):
     dynamics = Instance(Dynamics)
     simulation = Instance(Simulation)
 
-    config_file_path = CUnicode('config.in.ini', config=True, help="""Path to a
+    config_file_path = CBytes('config.in.ini', config=True, help="""Path to a
         configuration file to load from. The configuration files contains settings
         for all of the MD options. Every option can be either set in the config
         file and/or the command line. (see `--help-all`).""")
-    config_file_out = CUnicode('config.out.ini', config=True, help="""Write a
+    config_file_out = CBytes('config.out.ini', config=True, help="""Write a
         config file containing all of the active options used by this
         simulation.""")
     show_script = CBool(True, config=True, help="""Print a script that can be
