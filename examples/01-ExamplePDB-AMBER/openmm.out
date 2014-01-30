@@ -1,0 +1,83 @@
+
+>>> ###################################################################
+>>> # To use this script, paste all of the lines starting with the
+>>> # three greater than signs (>>>) into a python interpreter.
+>>> ###################################################################
+>>> 
+>>> from simtk.unit import *
+>>> from simtk import openmm as mm
+>>> from simtk.openmm import app
+>>> 
+>>> pdb = app.PDBFile('input.pdb')
+>>> topology = pdb.topology
+>>> positions = pdb.positions
+>>> forcefield = app.ForceField('amber99sb.xml', 'tip3p.xml')
+>>> system = forcefield.createSystem(topology,nonbondedMethod=PME,constraints=HBonds
+... ,rigidWater=True,nonbondedCutoff=1.0*nanometer,useDispersionCorrection=True,ewal
+... dErrorTolerance=0.0005)
+########################################################################
+# Option Summary. A more detailed config file is saved to config.out.ini
+########################################################################
+
+[General]                       
+protein = amber99sb              # your selection
+water = TIP3P                    # your selection
+platform = NotSpecified          # default value
+coords = input.pdb               # your selection
+precision = Mixed                # default value
+
+[System]                        
+nb_method = PME                  # default value
+constraints = HBonds             # default value
+rigid_water = True               # default value
+rand_vels = True                 # default value
+disp_corr = True                 # default value
+ewald_tol = 0.0005               # default value
+cutoff = 1.0*nanometer           # default value
+gen_temp = 300*kelvin            # default value
+
+[Dynamics]                      
+integrator = Langevin            # default value
+dt = 2*femtosecond               # default value
+barostat = None                  # default value
+thermostat = None                # default value
+temp = 300*kelvin                # default value
+collision_rate = 1.0/picosecond  # default value
+
+[Simulation]                    
+n_steps = 10000                  # default value
+restart_file = restart.json      # default value
+minimize = True                  # default value
+restart_freq = 5000              # default value
+traj_file = output.dcd           # default value
+read_restart = False             # default value
+progress_freq = 1000             # default value
+write_restart = True             # default value
+traj_freq = 1000                 # default value
+
+>>> integrator = mm.LangevinIntegrator(300*kelvin, 1.0/picosecond, 2*femtosecond)
+>>> platform = mm.Platform.getPlatformByName('CUDA')
+>>> platformProperties = {'CudaPrecision': 'mixed'}
+>>> simulation = app.Simulation(topology, system, integrator, platform, properties)
+>>> simulation.context.setPositions(positions)
+>>> simulation.minimizeEnergy()
+>>> simulation.context.setVelocitiesToTemperature()
+>>> simulation.reporters.append(ProgressReporter(sys.stdout, 1000, 10000))
+>>> simulation.reporters.append(DCDReporter(output.dcd, 1000))
+>>> simulation.reporters.append(RestartReporter(restart.json, 5000))
+>>> simulation.step(10000)
+
+
+Progress   WallTime Left      Speed          Time            P.E.            K.E.        Total E.          Temp        Vol        Rho
+     (%)       (d:h:m:s)   (ns/day)          (ps)        (kJ/mol)        (kJ/mol)        (kJ/mol)           (K)     (nm^3)     (g/mL)
+  0.000%              ??       0.00       0.00000   -145601.10627     22735.40984   -122865.69643     303.45556    87.8659     1.0185
+ 10.000%            0:26      58.28       2.00000   -121425.47173     20418.93552   -101006.53621     272.53696    87.8659     1.0185
+ 20.000%            0:21      63.90       4.00000   -117698.30258     21846.96903    -95851.33355     291.59730    87.8659     1.0185
+ 30.000%            0:18      65.87       6.00000   -115987.04837     21921.79359    -94065.25478     292.59601    87.8659     1.0185
+ 40.000%            0:15      66.86       8.00000   -115561.29255     22457.15000    -93104.14255     299.74155    87.8659     1.0185
+ 50.000%            0:12      67.38      10.00000   -115731.60258     22291.23852    -93440.36405     297.52709    87.8659     1.0185
+ 60.000%            0:10      65.47      12.00000   -115530.80403     22171.33977    -93359.46427     295.92677    87.8659     1.0185
+ 70.000%            0:07      66.03      14.00000   -115847.78383     22013.83397    -93833.94986     293.82449    87.8659     1.0185
+ 80.000%            0:05      66.45      16.00000   -115445.55978     22287.52431    -93158.03548     297.47751    87.8659     1.0185
+ 90.000%            0:02      66.77      18.00000   -115568.79607     22161.67724    -93407.11884     295.79780    87.8659     1.0185
+100.000%            0:00      67.04      20.00000   -115353.98849     22018.59357    -93335.39493     293.88802    87.8659     1.0185
