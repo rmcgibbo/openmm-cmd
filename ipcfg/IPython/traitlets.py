@@ -1,3 +1,4 @@
+# encoding: utf-8
 """
 A lightweight Traits like module.
 
@@ -38,19 +39,19 @@ Authors:
 * Enthought, Inc.  Some of the code in this file comes from enthought.traits
   and is licensed under the BSD license.  Also, many of the ideas also come
   from enthought.traits even though our implementation is very different.
-* Robert McGibbon
 """
+
 #-----------------------------------------------------------------------------
-#  Portions copyright (C) 2008-2011  The IPython Development Team
+#  Copyright (C) 2008-2011  The IPython Development Team
 #
 #  Distributed under the terms of the BSD License.  The full license is in
 #  the file COPYING, distributed as part of this software.
 #-----------------------------------------------------------------------------
 
-
 #-----------------------------------------------------------------------------
 # Imports
 #-----------------------------------------------------------------------------
+
 
 import inspect
 import re
@@ -63,8 +64,9 @@ try:
 except:
     ClassTypes = (type,)
 
-from importstring import import_item
-import py3compat
+from ipcfg.IPython.importstring import import_item
+from ipcfg.IPython import py3compat
+from ipcfg.IPython.py3compat import iteritems
 
 SequenceTypes = (list, tuple, set, frozenset)
 
@@ -93,7 +95,7 @@ def class_of ( object ):
     correct indefinite article ('a' or 'an') preceding it (e.g., 'an Image',
     'a PlotValue').
     """
-    if isinstance( object, basestring ):
+    if isinstance( object, py3compat.string_types ):
         return add_article( object )
 
     return add_article( object.__class__.__name__ )
@@ -103,9 +105,11 @@ def add_article ( name ):
     """ Returns a string containing the correct indefinite article ('a' or 'an')
     prefixed to the specified string.
     """
+    if hasattr(name, '__name__'):
+        name = name.__name__
     if name[:1].lower() in 'aeiou':
-        return 'an ' + name
-
+       return 'an ' + name
+    
     return 'a ' + name
 
 
@@ -203,6 +207,7 @@ class TraitType(object):
        This is used by the :class:`This` trait to allow subclasses to
        accept superclasses for :class:`This` values.
     """
+
 
     metadata = {}
     default_value = Undefined
@@ -349,6 +354,7 @@ class TraitType(object):
     def set_metadata(self, key, value):
         getattr(self, '_metadata', {})[key] = value
 
+
 #-----------------------------------------------------------------------------
 # The HasTraits implementation
 #-----------------------------------------------------------------------------
@@ -370,7 +376,7 @@ class MetaHasTraits(type):
         # print "MetaHasTraitlets (mcls, name): ", mcls, name
         # print "MetaHasTraitlets (bases): ", bases
         # print "MetaHasTraitlets (classdict): ", classdict
-        for k,v in classdict.iteritems():
+        for k,v in iteritems(classdict):
             if isinstance(v, TraitType):
                 v.name = k
             elif inspect.isclass(v):
@@ -386,14 +392,12 @@ class MetaHasTraits(type):
         This sets the :attr:`this_class` attribute of each TraitType in the
         class dict to the newly created class ``cls``.
         """
-        for k, v in classdict.iteritems():
+        for k, v in iteritems(classdict):
             if isinstance(v, TraitType):
                 v.this_class = cls
         super(MetaHasTraits, cls).__init__(name, bases, classdict)
 
-class HasTraits(object):
-
-    __metaclass__ = MetaHasTraits
+class HasTraits(py3compat.with_metaclass(MetaHasTraits, object)):
 
     def __new__(cls, *args, **kw):
         # This is needed because in Python 2.6 object.__new__ only accepts
@@ -426,15 +430,15 @@ class HasTraits(object):
         # Allow trait values to be set using keyword arguments.
         # We need to use setattr for this to trigger validation and
         # notifications.
-        for key, value in kw.iteritems():
+        for key, value in iteritems(kw):
             setattr(self, key, value)
 
     def _notify_trait(self, name, old_value, new_value):
 
         # First dynamic ones
-        callables = self._trait_notifiers.get(name,[])
-        more_callables = self._trait_notifiers.get('anytrait',[])
-        callables.extend(more_callables)
+        callables = []
+        callables.extend(self._trait_notifiers.get(name,[]))
+        callables.extend(self._trait_notifiers.get('anytrait',[]))
 
         # Now static ones
         try:
@@ -677,7 +681,7 @@ class Type(ClassBasedTraitType):
         elif klass is None:
             klass = default_value
 
-        if not (inspect.isclass(klass) or isinstance(klass, basestring)):
+        if not (inspect.isclass(klass) or isinstance(klass, py3compat.string_types)):
             raise TraitError("A Type trait must specify a class.")
 
         self.klass       = klass
@@ -698,7 +702,7 @@ class Type(ClassBasedTraitType):
 
     def info(self):
         """ Returns a description of the trait."""
-        if isinstance(self.klass, basestring):
+        if isinstance(self.klass, py3compat.string_types):
             klass = self.klass
         else:
             klass = self.klass.__name__
@@ -712,9 +716,9 @@ class Type(ClassBasedTraitType):
         super(Type, self).instance_init(obj)
 
     def _resolve_classes(self):
-        if isinstance(self.klass, basestring):
+        if isinstance(self.klass, py3compat.string_types):
             self.klass = import_item(self.klass)
-        if isinstance(self.default_value, basestring):
+        if isinstance(self.default_value, py3compat.string_types):
             self.default_value = import_item(self.default_value)
 
     def get_default_value(self):
@@ -759,8 +763,8 @@ class Instance(ClassBasedTraitType):
         allow_none : bool
             Indicates whether None is allowed as a value.
 
-        Default Value
-        -------------
+        Notes
+        -----
         If both ``args`` and ``kw`` are None, then the default value is None.
         If ``args`` is a tuple and ``kw`` is a dict, then the default is
         created as ``klass(*args, **kw)``.  If either ``args`` or ``kw`` is
@@ -769,7 +773,7 @@ class Instance(ClassBasedTraitType):
 
         self._allow_none = allow_none
 
-        if (klass is None) or (not (inspect.isclass(klass) or isinstance(klass, basestring))):
+        if (klass is None) or (not (inspect.isclass(klass) or isinstance(klass, py3compat.string_types))):
             raise TraitError('The klass argument must be a class'
                                 ' you gave: %r' % klass)
         self.klass = klass
@@ -806,7 +810,7 @@ class Instance(ClassBasedTraitType):
             self.error(obj, value)
 
     def info(self):
-        if isinstance(self.klass, basestring):
+        if isinstance(self.klass, py3compat.string_types):
             klass = self.klass
         else:
             klass = self.klass.__name__
@@ -821,7 +825,7 @@ class Instance(ClassBasedTraitType):
         super(Instance, self).instance_init(obj)
 
     def _resolve_classes(self):
-        if isinstance(self.klass, basestring):
+        if isinstance(self.klass, py3compat.string_types):
             self.klass = import_item(self.klass)
 
     def get_default_value(self):
@@ -994,7 +998,7 @@ class Bytes(TraitType):
     """A trait for byte strings."""
 
     default_value = b''
-    info_text = 'a string'
+    info_text = 'a bytes object'
 
     def validate(self, obj, value):
         if isinstance(value, bytes):
@@ -1019,10 +1023,14 @@ class Unicode(TraitType):
     info_text = 'a unicode string'
 
     def validate(self, obj, value):
-        if isinstance(value, unicode):
+        if isinstance(value, py3compat.unicode_type):
             return value
         if isinstance(value, bytes):
-            return unicode(value)
+            try:
+                return value.decode('ascii', 'strict')
+            except UnicodeDecodeError:
+                msg = "Could not decode {!r} for unicode trait '{}' of {} instance."
+                raise TraitError(msg.format(value, self.name, class_of(obj)))
         self.error(obj, value)
 
 
@@ -1031,7 +1039,7 @@ class CUnicode(Unicode):
 
     def validate(self, obj, value):
         try:
-            return unicode(value)
+            return py3compat.unicode_type(value)
         except:
             self.error(obj, value)
 
@@ -1090,13 +1098,6 @@ class CBool(Bool):
     """A casting version of the boolean trait."""
 
     def validate(self, obj, value):
-        if isinstance(value, basestring):
-            if value.lower() in ['true', 'yes', 'y']:
-                return True
-            elif value.lower() in ['false', 'no', 'n']:
-                return False
-            self.error(obj, value)
-
         try:
             return bool(value)
         except:
@@ -1117,7 +1118,7 @@ class Enum(TraitType):
                 return value
 
         if value in self.values:
-            return value
+                return value
         self.error(obj, value)
 
     def info(self):
@@ -1127,28 +1128,21 @@ class Enum(TraitType):
             return result + ' or None'
         return result
 
-
 class CaselessStrEnum(Enum):
     """An enum of strings that are caseless in validate."""
 
     def validate(self, obj, value):
-        if self._allow_none and value in [None, 'None']:
-            return None
+        if value is None:
+            if self._allow_none:
+                return value
 
-        if not isinstance(value, basestring):
+        if not isinstance(value, py3compat.string_types):
             self.error(obj, value)
 
         for v in self.values:
             if v.lower() == value.lower():
                 return v
-
         self.error(obj, value)
-
-    def error(self, obj, value):
-        e = ("The '%s' trait of %s instance must be %s, but a value of '%s' "
-             "was specified.") % (self.name, class_of(obj), self.info(), value)
-        raise TraitError(e)
-
 
 class Container(Instance):
     """An instance of a container (list, set, etc.)
@@ -1306,7 +1300,6 @@ class Set(Container):
     """An instance of a Python set."""
     klass = set
 
-
 class Tuple(Container):
     """An instance of a Python tuple."""
     klass = tuple
@@ -1418,7 +1411,6 @@ class Dict(Instance):
         super(Dict,self).__init__(klass=dict, args=args,
                                   allow_none=allow_none, **metadata)
 
-
 class TCPAddress(TraitType):
     """A trait for an (ip, port) tuple.
 
@@ -1431,12 +1423,11 @@ class TCPAddress(TraitType):
     def validate(self, obj, value):
         if isinstance(value, tuple):
             if len(value) == 2:
-                if isinstance(value[0], basestring) and isinstance(value[1], int):
+                if isinstance(value[0], py3compat.string_types) and isinstance(value[1], int):
                     port = value[1]
                     if port >= 0 and port <= 65535:
                         return value
         self.error(obj, value)
-
 
 class CRegExp(TraitType):
     """A casting compiled regular expression trait.

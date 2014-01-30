@@ -338,6 +338,7 @@ class OpenMMApplication(SingletonConfigurable):
             self.exit(0)
 
         loader = ArgParseLoader(argv=argv, classes=self.classes, aliases=self.aliases)
+
         config = loader.load_config()
         self.update_config(config)
         # store unparsed args in extra_args

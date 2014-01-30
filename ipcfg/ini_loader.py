@@ -17,9 +17,7 @@ class IniFileConfigLoader(FileConfigLoader):
     ConfigParser
     """
     def __init__(self, filename, path=None):
-        super(IniFileConfigLoader, self).__init__()
-        self.filename = filename
-        self.path = path
+        super(IniFileConfigLoader, self).__init__(filename, path)
         self.full_filename = ''
         self.parser = configparser.RawConfigParser()
 

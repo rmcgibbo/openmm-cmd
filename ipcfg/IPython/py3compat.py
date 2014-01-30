@@ -6,7 +6,7 @@ import sys
 import re
 import types
 
-from .encoding import DEFAULT_ENCODING
+DEFAULT_ENCODING = sys.getdefaultencoding()
 
 orig_open = open
 

@@ -13,11 +13,12 @@ Authors:
 * Fernando Perez
 * Min RK
 """
+from __future__ import print_function
 
 #-----------------------------------------------------------------------------
 #  Copyright (C) 2008-2011  The IPython Development Team
 #
-#  Distributed under the terms of the BSD License.  The full liceunse is in
+#  Distributed under the terms of the BSD License.  The full license is in
 #  the file COPYING, distributed as part of this software.
 #-----------------------------------------------------------------------------
 
@@ -25,14 +26,13 @@ Authors:
 # Imports
 #-----------------------------------------------------------------------------
 
-from __future__ import print_function
-import sys
-import datetime
 from copy import deepcopy
 
-from loader import Config
-from traitlets import HasTraits, Instance, List
-from text import indent, wrap_paragraphs
+from ipcfg.IPython.loader import Config, LazyConfigValue
+from ipcfg.IPython.traitlets import HasTraits, Instance
+from ipcfg.IPython.text import indent, wrap_paragraphs
+from ipcfg.IPython.py3compat import iteritems
+
 
 #-----------------------------------------------------------------------------
 # Helper classes for Configurables
@@ -53,8 +53,7 @@ class MultipleInstanceError(ConfigurableError):
 class Configurable(HasTraits):
 
     config = Instance(Config, (), {})
-    parent = Instance('ipcfg.IPython.configurable.Configurable')
-    created = None
+    parent = Instance('IPython.config.configurable.Configurable')
 
     def __init__(self, **kwargs):
         """Create a configurable given a config config.
@@ -101,7 +100,6 @@ class Configurable(HasTraits):
         # This should go second so individual keyword arguments override
         # the values in config.
         super(Configurable, self).__init__(**kwargs)
-        self.created = datetime.datetime.now()
 
     #-------------------------------------------------------------------------
     # Static trait notifiations
@@ -138,7 +136,7 @@ class Configurable(HasTraits):
                 if c._has_section(sname):
                     my_config.merge(c[sname])
         return my_config
-
+    
     def _load_config(self, cfg, section_names=None, traits=None):
         """load traits from a Config object"""
         
@@ -148,8 +146,13 @@ class Configurable(HasTraits):
             section_names = self.section_names()
         
         my_config = self._find_my_config(cfg)
-        for name, config_value in my_config.iteritems():
+        for name, config_value in iteritems(my_config):
             if name in traits:
+                if isinstance(config_value, LazyConfigValue):
+                    # ConfigValue is a wrapper for using append / update on containers
+                    # without having to copy the 
+                    initial = getattr(self, name)
+                    config_value = config_value.get_value(initial)
                 # We have to do a deepcopy here if we don't deepcopy the entire
                 # config object. If we don't, a mutable config_value will be
                 # shared by all instances, effectively making it a class attribute.
@@ -192,7 +195,7 @@ class Configurable(HasTraits):
         final_help = []
         final_help.append(u'%s options' % cls.__name__)
         final_help.append(len(final_help[0])*u'-')
-        for k, v in sorted(cls.class_traits(config=True).iteritems()):
+        for k, v in sorted(cls.class_traits(config=True).items()):
             help = cls.class_get_trait_help(v, inst)
             final_help.append(help)
         return '\n'.join(final_help)
@@ -206,12 +209,7 @@ class Configurable(HasTraits):
         """
         assert inst is None or isinstance(inst, cls)
         lines = []
-        if hasattr(trait.__class__, '_displayname'):
-            traittype = trait.__class__._displayname
-        else:
-            traittype = trait.__class__.__name__
-
-        header = "--%s.%s <%s>" % (cls.__name__, trait.name, traittype)
+        header = "--%s.%s=<%s>" % (cls.__name__, trait.name, trait.__class__.__name__)
         lines.append(header)
         if inst is not None:
             lines.append(indent('Current: %r' % getattr(inst, trait.name), 4))
@@ -277,7 +275,7 @@ class Configurable(HasTraits):
             lines.append(c('%s will inherit config from: %s'%(cls.__name__, pstr)))
             lines.append('')
 
-        for name, trait in cls.class_traits(config=True).iteritems():
+        for name, trait in iteritems(cls.class_traits(config=True)):
             help = trait.get_metadata('help') or ''
             lines.append(c(help))
             lines.append('# c.%s.%s = %r'%(cls.__name__, name, trait.get_default_value()))
@@ -370,3 +368,19 @@ class SingletonConfigurable(Configurable):
     def initialized(cls):
         """Has an instance been created?"""
         return hasattr(cls, "_instance") and cls._instance is not None
+
+
+class LoggingConfigurable(Configurable):
+    """A parent class for Configurables that log.
+
+    Subclasses have a log trait, and the default behavior
+    is to get the logger from the currently running Application
+    via Application.instance().log.
+    """
+
+    log = Instance('logging.Logger')
+    def _log_default(self):
+        from IPython.config.application import Application
+        return Application.instance().log
+
+

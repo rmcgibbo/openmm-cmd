@@ -1,3 +1,4 @@
+from .IPython.py3compat import iteritems, string_types
 from .IPython.loader import Config, AliasError
 from .IPython.traitlets import Bool
 from argparse import ArgumentParser, ArgumentError
@@ -21,7 +22,7 @@ class ArgParseLoader(object):
                 nargs = trait._metadata.get('nargs', None)
                 add_argument('--' + name, type=str, dest=dest, nargs=nargs)
 
-        for k, v in aliases.iteritems():
+        for k, v in iteritems(aliases):
             try:
                 add_argument('--' + k, type=str, dest=v, nargs=None)
             except ArgumentError:
@@ -36,9 +37,9 @@ class ArgParseLoader(object):
                 raise AliasError(item[2:], all_arguments)
 
     def load_config(self):
-        for k, v in self.known_args.__dict__.iteritems():
+        for k, v in iteritems(self.known_args.__dict__):
             if v is not None:
-                if isinstance(v, basestring):
+                if isinstance(v, string_types):
                     v = '"%s"' % v
                 elif isinstance(v, list):
                     pass
