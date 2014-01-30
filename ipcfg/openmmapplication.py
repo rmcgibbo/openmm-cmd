@@ -17,6 +17,7 @@ traits automatically aliased on the command line.
 # Imports
 #-----------------------------------------------------------------------------
 
+from __future__ import print_function, division
 import os
 import sys
 import copy
@@ -240,7 +241,7 @@ class OpenMMApplication(SingletonConfigurable):
         for l in wrap_paragraphs(self.long_description):
             lines.append(l)
             lines.append('')
-        print os.linesep.join(lines)
+        print(os.linesep.join(lines))
 
     def print_options(self):
         if not self.aliases:
@@ -267,8 +268,8 @@ class OpenMMApplication(SingletonConfigurable):
                 cls.class_print_help()
                 print
         else:
-            print "To see all available configurables, use `--help-all`"
-            print
+            print("To see all available configurables, use `--help-all`")
+            print()
 
     def print_alias_help(self):
         """Print the alias part of the help."""
@@ -294,7 +295,7 @@ class OpenMMApplication(SingletonConfigurable):
                 help[0] = help[0].replace('--%s='%alias, '-%s '%alias)
             lines.extend(help)
         # lines.append('')
-        print os.linesep.join(lines)
+        print(os.linesep.join(lines))
 
 
     def error(self, message=None, header=False):

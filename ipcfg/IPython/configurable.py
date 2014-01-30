@@ -25,6 +25,7 @@ Authors:
 # Imports
 #-----------------------------------------------------------------------------
 
+from __future__ import print_function
 import sys
 import datetime
 from copy import deepcopy
@@ -236,7 +237,7 @@ class Configurable(HasTraits):
     @classmethod
     def class_print_help(cls, inst=None):
         """Get the help string for a single trait and print it."""
-        print cls.class_get_help(inst)
+        print(cls.class_get_help(inst))
 
     @classmethod
     def class_config_section(cls):

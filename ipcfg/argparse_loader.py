@@ -42,6 +42,6 @@ class ArgParseLoader(object):
                     v = '"%s"' % v
                 elif isinstance(v, list):
                     pass
-                exec 'self.config.%s = %s' % (k, v)
+                exec('self.config.%s = %s' % (k, v))
 
         return self.config

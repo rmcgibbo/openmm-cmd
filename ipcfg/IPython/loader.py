@@ -356,7 +356,7 @@ class CommandLineConfigLoader(ConfigLoader):
             # This case happens if the rhs is a string.
             value = rhs
 
-        exec u'self.config.%s = value' % lhs
+        exec(u'self.config.%s = value' % lhs)
 
     def _load_flag(self, cfg):
         """update self.config from a flag, which can be a dict or Config"""
@@ -612,7 +612,7 @@ class ArgParseConfigLoader(CommandLineConfigLoader):
     def _convert_to_config(self):
         """self.parsed_data->self.config"""
         for k, v in vars(self.parsed_data).iteritems():
-            exec "self.config.%s = v"%k in locals(), globals()
+            exec("self.config.%s = v"%k in locals(), globals())
 
 class KVArgParseConfigLoader(ArgParseConfigLoader):
     """A config loader that loads aliases and flags with argparse,
@@ -669,7 +669,7 @@ class KVArgParseConfigLoader(ArgParseConfigLoader):
                 subcs.append(self.alias_flags[k])
             else:
                 # eval the KV assignment
-                print k, v
+                # print k, v
                 self._exec_config_str(k, v)
 
         for subc in subcs:
