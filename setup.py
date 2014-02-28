@@ -68,7 +68,7 @@ URL                 = 'https://github.com/rmcgibbo/openmm-cmd'
 DOWNLOAD_URL        = 'https://github.com/rmcgibbo/openmm-cmd/releases'
 PLATFORMS           = ['Windows', 'Linux', 'Mac OS-X', 'Solaris']
 CLASSIFIERS         = filter(None, CLASSIFIERS.split('\n'))
-VERSION             = '0.1'
+VERSION             = '0.2'
 
 SCRIPTS             = ['openmm']
 
