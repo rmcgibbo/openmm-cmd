@@ -1,4 +1,4 @@
-OpenMM Command Line Executable: `openmm`
+OpenMM Command Line Executable: `openmm` 
 ==============================
 
 This program sets up and runs an OpenMM simulation in a user-friendly
