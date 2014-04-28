@@ -28,7 +28,7 @@ from .IPython.configurable import Configurable, SingletonConfigurable
 from .IPython.text import indent, dedent, wrap_paragraphs
 from .IPython.loader import ConfigFileNotFound
 from .ini_loader import IniFileConfigLoader
-from .argparse_loader import ArgParseLoader
+from .optparse_loader import OptParseLoader
 
 
 #-----------------------------------------------------------------------------
@@ -336,7 +336,7 @@ class OpenMMApplication(SingletonConfigurable):
             self.print_version()
             self.exit(0)
 
-        loader = ArgParseLoader(argv=argv, classes=self.classes, aliases=self.aliases)
+        loader = OptParseLoader(argv=argv, classes=self.classes, aliases=self.aliases)
         config = loader.load_config()
         self.update_config(config)
         # store unparsed args in extra_args

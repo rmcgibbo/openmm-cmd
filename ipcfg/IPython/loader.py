@@ -27,7 +27,7 @@ import __builtin__ as builtin_mod
 import os
 import re
 import sys
-import argparse
+import optparse
 
 from path import filefind
 import py3compat
@@ -64,24 +64,24 @@ class AliasError(AttributeError):
         return self.msg
 
 #-----------------------------------------------------------------------------
-# Argparse fix
+# Optparse fix
 #-----------------------------------------------------------------------------
 
-# Unfortunately argparse by default prints help messages to stderr instead of
+# Unfortunately optparse by default prints help messages to stderr instead of
 # stdout.  This makes it annoying to capture long help screens at the command
 # line, since one must know how to pipe stderr, which many users don't know how
 # to do.  So we override the print_help method with one that defaults to
 # stdout and use our class instead.
 
-class ArgumentParser(argparse.ArgumentParser):
-    """Simple argparse subclass that prints help to stdout by default."""
+class OptionParser(optparse.OptionParser):
+    """Simple optparse subclass that prints help to stdout by default."""
 
     def print_help(self, file=None):
         if file is None:
             file = sys.stdout
-        return super(ArgumentParser, self).print_help(file)
+        return super(OptionParser, self).print_help(file)
 
-    print_help.__doc__ = argparse.ArgumentParser.print_help.__doc__
+    print_help.__doc__ = optparse.OptionParser.print_help.__doc__
 
 #-----------------------------------------------------------------------------
 # Config class for holding config information
@@ -527,11 +527,11 @@ class KeyValueConfigLoader(CommandLineConfigLoader):
                 self.extra_args.append(item)
         return self.config
 
-class ArgParseConfigLoader(CommandLineConfigLoader):
-    """A loader that uses the argparse module to load from the command line."""
+class OptParseConfigLoader(CommandLineConfigLoader):
+    """A loader that uses the optparse module to load from the command line."""
 
     def __init__(self, argv=None, aliases=None, flags=None, *parser_args, **parser_kw):
-        """Create a config loader for use with argparse.
+        """Create a config loader for use with optparse.
 
         Parameters
         ----------
@@ -542,11 +542,11 @@ class ArgParseConfigLoader(CommandLineConfigLoader):
 
         parser_args : tuple
           A tuple of positional arguments that will be passed to the
-          constructor of :class:`argparse.ArgumentParser`.
+          constructor of :class:`optparse.OptionParser`.
 
         parser_kw : dict
           A tuple of keyword arguments that will be passed to the
-          constructor of :class:`argparse.ArgumentParser`.
+          constructor of :class:`optparse.OptionParser`.
 
         Returns
         -------
@@ -563,7 +563,7 @@ class ArgParseConfigLoader(CommandLineConfigLoader):
 
         self.parser_args = parser_args
         self.version = parser_kw.pop("version", None)
-        kwargs = dict(argument_default=argparse.SUPPRESS)
+        kwargs = dict(argument_default=optparse.SUPPRESS)
         kwargs.update(parser_kw)
         self.parser_kw = kwargs
 
@@ -596,11 +596,11 @@ class ArgParseConfigLoader(CommandLineConfigLoader):
             return []
 
     def _create_parser(self, aliases=None, flags=None):
-        self.parser = ArgumentParser(*self.parser_args, **self.parser_kw)
-        self._add_arguments(aliases, flags)
+        self.parser = OptionParser(*self.parser_args, **self.parser_kw)
+        self._add_options(aliases, flags)
 
-    def _add_arguments(self, aliases=None, flags=None):
-        raise NotImplementedError("subclasses must implement _add_arguments")
+    def _add_options(self, aliases=None, flags=None):
+        raise NotImplementedError("subclasses must implement _add_options")
 
     def _parse_args(self, args):
         """self.parser->self.parsed_data"""
@@ -614,20 +614,20 @@ class ArgParseConfigLoader(CommandLineConfigLoader):
         for k, v in vars(self.parsed_data).iteritems():
             exec "self.config.%s = v"%k in locals(), globals()
 
-class KVArgParseConfigLoader(ArgParseConfigLoader):
-    """A config loader that loads aliases and flags with argparse,
+class KVOptParseConfigLoader(OptParseConfigLoader):
+    """A config loader that loads aliases and flags with optparse,
     but will use KVLoader for the rest.  This allows better parsing
     of common args, such as `ipython -c 'print 5'`, but still gets
     arbitrary config with `ipython --InteractiveShell.use_readline=False`"""
 
-    def _add_arguments(self, aliases=None, flags=None):
+    def _add_options(self, aliases=None, flags=None):
         self.alias_flags = {}
         # print aliases, flags
         if aliases is None:
             aliases = self.aliases
         if flags is None:
             flags = self.flags
-        paa = self.parser.add_argument
+        paa = self.parser.add_option
         for key,value in aliases.iteritems():
             if key in flags:
                 # flags
