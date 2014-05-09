@@ -53,12 +53,12 @@ class General(AppConfigurable):
     """
 
     protein = CaselessStrEnum(['amber96', 'amber99sb', 'amber99sb-ildn',
-        'amber99sb-nmr', 'amber03', 'amber10', 'amoeba2009'], allow_none=True, config=True,
+        'amber99sb-nmr', 'amber03', 'amber10', 'amoeba2009', 'amoeba2013'], allow_none=True, config=True,
         default_value='None', help=''' Force Field to use for the protein atoms.
         For details, consult the literature.''')
     water = CaselessStrEnum(['SPC/E', 'TIP3P', 'TIP4P-Ew', 'TIP5P', 'Implicit', 'None'],
         config=True, default_value='None', allow_none=True, help='''Water model 
-        to use in the simulation.''')
+        to use in the simulation (for AMOEBA just specify protein FF).''')
     ffxml = List(config=True, help='''Supply one or more custom force field 
         files in the OpenMM XML format. This can be used to specify a force field 
         for ligands, nonstandard amino acids, etc.  (For multiple files, use multiple 
@@ -208,11 +208,13 @@ class General(AppConfigurable):
                 files.append('amber10_obc.xml')
             elif self.protein == 'amoeba2009':
                 files.append('amoeba2009_gk.xml')
+            elif self.protein == 'amoeba2013':
+                files.append('amoeba2013_gk.xml')
             else:
                 self.error("Without specifying the protein force field, I can't"
                            "unambiguously pick the implicit solvent parameters.")
         else:
-            if self.protein != 'amoeba2009': # AMOEBA automatically includes a water model.
+            if self.protein not in ['amoeba2009', 'amoeba2013']: # AMOEBA automatically includes a water model.
                 self.log.warning("No builtin water model is being used. If you'd "
                              "like to specify a water model, use --water.")
 
