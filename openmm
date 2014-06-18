@@ -814,7 +814,7 @@ class OpenMM(OpenMMApplication):
             option_dict['polarization'] = self.system.polarization
             # Set polar_eps if using mutual polarization
             if self.system.polarization == 'mutual':
-                option_dict['mutualTargetInducedEpsilon'] = self.system.polar_eps
+                option_dict['mutualInducedTargetEpsilon'] = self.system.polar_eps
             elif 'polar_eps' in self.system.specified_config_traits:
                 self.error("The polar_eps option is used in mutual polarization only.")
             # The logic here allows the user to override ewald_tol if they specify both aewald and pme_grid.
