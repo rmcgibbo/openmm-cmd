@@ -792,8 +792,12 @@ class OpenMM(OpenMMApplication):
 
         # The option dictionary that gets passed to createSystem() is initialized.
         option_dict = OrderedDict([('nonbondedMethod',getattr(app, self.system.nb_method)),
-                                   ('constraints',getattr(app, self.system.constraints)),
                                    ('rigidWater',self.system.rigid_water)])
+
+        if self.system.constraints == None:
+            option_dict['constraints'] = None
+        else:
+            option_dict['constraints'] = getattr(app, self.system.constraints)
 
         # Set the nonbonded cutoff if we're using nonbonded cutoffs.
         if self.system.nb_method in ['CutoffNonPeriodic', 'CutoffPeriodic', 'Ewald', 'PME']:
@@ -810,7 +814,7 @@ class OpenMM(OpenMMApplication):
             option_dict['polarization'] = self.system.polarization
             # Set polar_eps if using mutual polarization
             if self.system.polarization == 'mutual':
-                option_dict['polar_eps'] = self.system.polar_eps
+                option_dict['mutualTargetInducedEpsilon'] = self.system.polar_eps
             elif 'polar_eps' in self.system.specified_config_traits:
                 self.error("The polar_eps option is used in mutual polarization only.")
             # The logic here allows the user to override ewald_tol if they specify both aewald and pme_grid.
